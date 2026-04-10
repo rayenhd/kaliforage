@@ -37,14 +37,19 @@ db = firestore.client()
 
 app = FastAPI(title="Kaliforage Management API")
 
-# testd
-allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+# CORS origins are configured via env to support local dev + deployed frontends.
+allowed_origins_raw = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:3000,https://kaliforage.vercel.app",
+)
 allowed_origins = [origin.strip() for origin in allowed_origins_raw.split(",") if origin.strip()]
+allowed_origin_regex = os.getenv("ALLOWED_ORIGIN_REGEX")
 
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=allowed_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
