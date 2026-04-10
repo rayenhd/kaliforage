@@ -37,7 +37,7 @@ db = firestore.client()
 
 app = FastAPI(title="Kaliforage Management API")
 
-# test
+# testd
 allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
 allowed_origins = [origin.strip() for origin in allowed_origins_raw.split(",") if origin.strip()]
 
