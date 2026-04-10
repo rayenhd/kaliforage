@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Environment files
+.env
+backend/.env
+
+# Firebase / GCP credentials
+backend/serviceAccountKey.json
+backend/serviceAccountKey*.json
