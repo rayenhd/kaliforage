@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import axios from "axios";
 import { useAuth } from "../AuthContext";
 import { Link } from "react-router-dom";
@@ -12,7 +12,12 @@ const UserManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     try {
       const token = await user.getIdToken();
       const res = await axios.get(`${process.env.REACT_APP_API_URL}/users`, {
@@ -24,11 +29,11 @@ const UserManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     fetchUsers();
-  }, [user]);
+  }, [fetchUsers]);
 
   const handleAddUser = async (e) => {
     e.preventDefault();

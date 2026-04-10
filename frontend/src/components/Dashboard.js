@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { useAuth } from "../AuthContext";
 import { Link } from "react-router-dom";
@@ -9,7 +9,12 @@ const Dashboard = () => {
   const [demandes, setDemandes] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchDemandes = async () => {
+  const fetchDemandes = useCallback(async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     try {
       const token = await user.getIdToken();
       console.log("Firebase ID token (Dashboard):", token);
@@ -22,11 +27,11 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     fetchDemandes();
-  }, []);
+  }, [fetchDemandes]);
 
   const formatDate = (dateString) => {
     if (!dateString) return "-";
