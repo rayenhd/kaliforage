@@ -28,7 +28,7 @@ if not firebase_admin._apps:
         # firebase_admin.initialize_app(cred)
 
 from .models import (
-    Demande, DemandeCreate, DemandeUpdate, DemandeBEUpdate, 
+    Demande, DemandeCreate, DemandeUpdate, DemandeEntrepriseUpdate,
     UserInfo, UserRole, UserCreate
 )
 from .auth import get_current_user, require_role
@@ -126,9 +126,9 @@ async def update_demande(
         if current_user.role.value not in demande_data.get("visibilite", []):
             raise HTTPException(status_code=403, detail="Not authorized to edit this demande")
         
-        # Restricted update
+        # Company users can update visible demandes (except visibility field).
         try:
-            update_obj = DemandeBEUpdate(**demande_update)
+            update_obj = DemandeEntrepriseUpdate(**demande_update)
             update_data = {k: v for k, v in update_obj.dict().items() if v is not None}
             doc_ref.update(update_data)
         except Exception as e:

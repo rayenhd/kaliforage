@@ -76,6 +76,25 @@ class DemandeBEUpdate(BaseModel):
     montant_chantier: Optional[float] = None
     commentaire: Optional[str] = None
 
+
+class DemandeEntrepriseUpdate(BaseModel):
+    # Company users can update all request fields except visibility.
+    date_demande: Optional[datetime] = None
+    adresse_chantier: Optional[str] = None
+    nom_client: Optional[str] = None
+    telephone: Optional[str] = None
+    email: Optional[str] = None
+    adresse_facturation: Optional[str] = None
+    type_intervention: Optional[List[str]] = None
+    description: Optional[str] = None
+    etat: Optional[EtatDemande] = None
+    date_sondage_prevue: Optional[datetime] = None
+    date_remise_rapport_prevue: Optional[datetime] = None
+    montant_chantier: Optional[float] = None
+    type_revenu: Optional[TypeRevenu] = None
+    revenu: Optional[float] = None
+    commentaire: Optional[str] = None
+
 class Demande(DemandeBase):
     id: str
 
