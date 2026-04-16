@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import List, Optional
 from datetime import datetime
 from enum import Enum
@@ -41,10 +41,17 @@ class DemandeBase(BaseModel):
     date_sondage_prevue: Optional[datetime] = None
     date_remise_rapport_prevue: Optional[datetime] = None
     montant_chantier: float = 0.0
-    type_revenu: Optional[TypeRevenu] = None
+    type_revenu: List[TypeRevenu] = Field(default_factory=list)
     revenu: float = 0.0
     commentaire: Optional[str] = None
-    visibilite: List[Visibilite] = []
+    visibilite: List[Visibilite] = Field(default_factory=list)
+
+    @field_validator("type_revenu", mode="before")
+    @classmethod
+    def normalize_type_revenu(cls, value):
+        if value is None:
+            return []
+        return value if isinstance(value, list) else [value]
 
 class DemandeCreate(DemandeBase):
     pass
@@ -63,10 +70,17 @@ class DemandeUpdate(BaseModel):
     date_sondage_prevue: Optional[datetime] = None
     date_remise_rapport_prevue: Optional[datetime] = None
     montant_chantier: Optional[float] = None
-    type_revenu: Optional[TypeRevenu] = None
+    type_revenu: Optional[List[TypeRevenu]] = None
     revenu: Optional[float] = None
     commentaire: Optional[str] = None
     visibilite: Optional[List[Visibilite]] = None
+
+    @field_validator("type_revenu", mode="before")
+    @classmethod
+    def normalize_type_revenu(cls, value):
+        if value is None:
+            return None
+        return value if isinstance(value, list) else [value]
 
 class DemandeBEUpdate(BaseModel):
     # Restricted update for BE users
@@ -91,9 +105,16 @@ class DemandeEntrepriseUpdate(BaseModel):
     date_sondage_prevue: Optional[datetime] = None
     date_remise_rapport_prevue: Optional[datetime] = None
     montant_chantier: Optional[float] = None
-    type_revenu: Optional[TypeRevenu] = None
+    type_revenu: Optional[List[TypeRevenu]] = None
     revenu: Optional[float] = None
     commentaire: Optional[str] = None
+
+    @field_validator("type_revenu", mode="before")
+    @classmethod
+    def normalize_type_revenu(cls, value):
+        if value is None:
+            return None
+        return value if isinstance(value, list) else [value]
 
 class Demande(DemandeBase):
     id: str

@@ -48,7 +48,7 @@ const AdminForm = () => {
     date_sondage_prevue: "",
     date_remise_rapport_prevue: "",
     montant_chantier: 0,
-    type_revenu: TYPES_REVENU[0],
+    type_revenu: [],
     revenu: 0,
     commentaire: "",
     visibilite: [],
@@ -73,6 +73,11 @@ const AdminForm = () => {
               date_demande: current.date_demande ? current.date_demande.split("T")[0] : "",
               date_sondage_prevue: current.date_sondage_prevue ? current.date_sondage_prevue.split("T")[0] : "",
               date_remise_rapport_prevue: current.date_remise_rapport_prevue ? current.date_remise_rapport_prevue.split("T")[0] : "",
+              type_revenu: Array.isArray(current.type_revenu)
+                ? current.type_revenu
+                : current.type_revenu
+                  ? [current.type_revenu]
+                  : [],
             };
             setFormData(formatted);
           }
@@ -91,7 +96,8 @@ const AdminForm = () => {
 
   const handleCheckboxChange = (name, value) => {
     setFormData((prev) => {
-      const currentValues = prev[name];
+      const currentRaw = prev[name];
+      const currentValues = Array.isArray(currentRaw) ? currentRaw : currentRaw ? [currentRaw] : [];
       const newValues = currentValues.includes(value)
         ? currentValues.filter((v) => v !== value)
         : [...currentValues, value];
@@ -210,9 +216,18 @@ const AdminForm = () => {
             />
 
             <label>Type de revenu:</label>
-            <select name="type_revenu" value={formData.type_revenu} onChange={handleChange} disabled={!isAdmin}>
-              {TYPES_REVENU.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
+            <div className="checkbox-group">
+              {TYPES_REVENU.map(type => (
+                <label key={type}>
+                  <input 
+                    type="checkbox" 
+                    checked={Array.isArray(formData.type_revenu) && formData.type_revenu.includes(type)}
+                    onChange={() => handleCheckboxChange("type_revenu", type)}
+                    disabled={!isAdmin}
+                  /> {type}
+                </label>
+              ))}
+            </div>
 
             <label>Revenu (€):</label>
             <input 

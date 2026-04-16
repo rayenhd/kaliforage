@@ -40,7 +40,7 @@ const FIELD_CONFIG = {
   date_sondage_prevue: { label: "Date sondage prévue", type: "date" },
   date_remise_rapport_prevue: { label: "Date remise rapport", type: "date" },
   montant_chantier: { label: "Montant chantier", type: "number" },
-  type_revenu: { label: "Type revenu", type: "select", options: TYPES_REVENU },
+  type_revenu: { label: "Type revenu", type: "multiselect", options: TYPES_REVENU },
   revenu: { label: "Revenu", type: "number" },
   commentaire: { label: "Commentaire", type: "textarea" },
   visibilite: { label: "Visibilité", type: "multiselect", options: VISIBILITES },
@@ -120,7 +120,7 @@ const Dashboard = () => {
       initialValue = toDateInputValue(initialValue);
     }
     if (config.type === "multiselect") {
-      initialValue = Array.isArray(initialValue) ? initialValue : [];
+      initialValue = Array.isArray(initialValue) ? initialValue : initialValue ? [initialValue] : [];
     }
     if (config.type === "number") {
       initialValue = initialValue ?? 0;
@@ -286,7 +286,11 @@ const Dashboard = () => {
                   <td className={editableClass("date_sondage_prevue")} onClick={() => openCellEditor(d, "date_sondage_prevue")}>{formatDate(d.date_sondage_prevue)}</td>
                   <td className={editableClass("date_remise_rapport_prevue")} onClick={() => openCellEditor(d, "date_remise_rapport_prevue")}>{formatDate(d.date_remise_rapport_prevue)}</td>
                   <td className={editableClass("montant_chantier")} onClick={() => openCellEditor(d, "montant_chantier")}>{formatCurrency(d.montant_chantier)}</td>
-                  <td className={editableClass("type_revenu")} onClick={() => openCellEditor(d, "type_revenu")}>{d.type_revenu || "-"}</td>
+                  <td className={editableClass("type_revenu")} onClick={() => openCellEditor(d, "type_revenu")}>
+                    {Array.isArray(d.type_revenu) && d.type_revenu.length > 0
+                      ? d.type_revenu.join(", ")
+                      : d.type_revenu || "-"}
+                  </td>
                   <td className={editableClass("revenu")} onClick={() => openCellEditor(d, "revenu")}>{formatCurrency(d.revenu)}</td>
                   <td className={`cell-long ${editableClass("commentaire")}`} onClick={() => openCellEditor(d, "commentaire")}>{d.commentaire || "-"}</td>
                   <td className={editableClass("visibilite")} onClick={() => openCellEditor(d, "visibilite")}>
