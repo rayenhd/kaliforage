@@ -410,7 +410,7 @@ textarea:focus {
 }
 
 .cell-modal-checkboxes label {
-  display: flex;
+  display: inline;
   align-items: center;
   gap: 8px;
   margin: 0;

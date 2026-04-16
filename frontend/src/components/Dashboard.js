@@ -341,12 +341,13 @@ const Dashboard = () => {
               <div className="cell-modal-checkboxes">
                 {editingCell.config.options.map((option) => (
                   <label key={option}>
+                    {option}
                     <input
                       type="checkbox"
                       checked={Array.isArray(editValue) && editValue.includes(option)}
                       onChange={() => toggleMultiValue(option)}
                     />
-                    {option}
+                    
                   </label>
                 ))}
               </div>
