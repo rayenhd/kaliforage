@@ -14,6 +14,7 @@ class EtatDemande(str, Enum):
 class TypeRevenu(str, Enum):
     APPORT_AFFAIRES = "🟡 Apport d’affaires"
     LOCATION_MACHINE = "🔵 Location Machine"
+    SONDAGE = "🟣 Sondage"
 
 class TypeIntervention(str, Enum):
     G1_PGC = "🟡 G1 PGC"
@@ -38,8 +39,7 @@ class DemandeBase(BaseModel):
     date_remise_rapport_prevue: Optional[datetime] = None
     montant_chantier: float = 0.0
     type_revenu: List[TypeRevenu] = Field(default_factory=list)
-    revenu: Optional[float] = None
-    revenu_lettres: Optional[str] = None
+    revenu: Optional[str] = None
     commentaire: Optional[str] = None
     visibilite: List[str] = Field(default_factory=list)
 
@@ -68,8 +68,7 @@ class DemandeUpdate(BaseModel):
     date_remise_rapport_prevue: Optional[datetime] = None
     montant_chantier: Optional[float] = None
     type_revenu: Optional[List[TypeRevenu]] = None
-    revenu: Optional[float] = None
-    revenu_lettres: Optional[str] = None
+    revenu: Optional[str] = None
     commentaire: Optional[str] = None
     visibilite: Optional[List[str]] = None
 
@@ -104,8 +103,7 @@ class DemandeEntrepriseUpdate(BaseModel):
     date_remise_rapport_prevue: Optional[datetime] = None
     montant_chantier: Optional[float] = None
     type_revenu: Optional[List[TypeRevenu]] = None
-    revenu: Optional[float] = None
-    revenu_lettres: Optional[str] = None
+    revenu: Optional[str] = None
     commentaire: Optional[str] = None
 
     @field_validator("type_revenu", mode="before")

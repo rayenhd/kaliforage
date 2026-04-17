@@ -13,7 +13,7 @@ const ETATS = [
   "🔴 Refusé / abandonné",
 ];
 
-const TYPES_REVENU = ["🟡 Apport d’affaires", "🔵 Location Machine"];
+const TYPES_REVENU = ["🟡 Apport d’affaires", "🔵 Location Machine", "🟣 Sondage"];
 const TYPES_INTERVENTION = [
   "🟡 G1 PGC",
   "🔵 G2 AVP",
@@ -37,8 +37,7 @@ const buildFieldConfig = (entreprises) => ({
   date_remise_rapport_prevue: { label: "Date remise rapport", type: "date" },
   montant_chantier: { label: "Montant chantier", type: "number" },
   type_revenu: { label: "Type revenu", type: "multiselect", options: TYPES_REVENU },
-  revenu: { label: "Revenu", type: "number" },
-  revenu_lettres: { label: "Revenu en lettres", type: "textarea" },
+  revenu: { label: "Revenu", type: "text" },
   commentaire: { label: "Commentaire", type: "textarea" },
   visibilite: { label: "Visibilité", type: "multiselect", options: entreprises },
 });
@@ -367,7 +366,6 @@ const Dashboard = () => {
                 <th>Montant Chantier</th>
                 <th>Type Revenu</th>
                 <th>Revenu</th>
-                <th>Revenu (lettres)</th>
                 <th>Commentaire</th>
                 <th>Visibilité</th>
                 <th>Actions</th>
@@ -376,7 +374,7 @@ const Dashboard = () => {
             <tbody>
               {filteredDemandes.length === 0 && (
                 <tr>
-                  <td colSpan="19" className="empty-table-cell">
+                  <td colSpan="18" className="empty-table-cell">
                     Aucune demande pour ce filtre.
                   </td>
                 </tr>
@@ -401,8 +399,7 @@ const Dashboard = () => {
                       ? d.type_revenu.join(", ")
                       : d.type_revenu || "-"}
                   </td>
-                  <td className={editableClass("revenu")} onClick={() => openCellEditor(d, "revenu")}>{formatCurrency(d.revenu)}</td>
-                  <td className={`cell-long ${editableClass("revenu_lettres")}`} onClick={() => openCellEditor(d, "revenu_lettres")}>{d.revenu_lettres || "-"}</td>
+                  <td className={`cell-long ${editableClass("revenu")}`} onClick={() => openCellEditor(d, "revenu")}>{d.revenu || "-"}</td>
                   <td className={`cell-long ${editableClass("commentaire")}`} onClick={() => openCellEditor(d, "commentaire")}>{d.commentaire || "-"}</td>
                   <td className={editableClass("visibilite")} onClick={() => openCellEditor(d, "visibilite")}>
                     {Array.isArray(d.visibilite) && d.visibilite.length > 0 ? (

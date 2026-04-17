@@ -15,6 +15,7 @@ const ETATS = [
 const TYPES_REVENU = [
   "🟡 Apport d’affaires",
   "🔵 Location Machine",
+  "🟣 Sondage",
 ];
 
 const TYPES_INTERVENTION = [
@@ -81,7 +82,6 @@ const AdminForm = () => {
     montant_chantier: 0,
     type_revenu: [],
     revenu: "",
-    revenu_lettres: "",
     commentaire: "",
     visibilite: [],
   });
@@ -119,7 +119,6 @@ const AdminForm = () => {
                   ? [current.type_revenu]
                   : [],
               revenu: current.revenu ?? "",
-              revenu_lettres: current.revenu_lettres || "",
             };
             setFormData(formatted);
           }
@@ -160,10 +159,7 @@ const AdminForm = () => {
         date_demande: formData.date_demande || null,
         date_sondage_prevue: formData.date_sondage_prevue || null,
         date_remise_rapport_prevue: formData.date_remise_rapport_prevue || null,
-        revenu:
-          formData.revenu === "" || formData.revenu === null || formData.revenu === undefined
-            ? null
-            : Number(formData.revenu),
+        revenu: formData.revenu ? String(formData.revenu).trim() : null,
       };
       if (id) {
         // Update
@@ -282,19 +278,12 @@ const AdminForm = () => {
               ))}
             </div>
 
-            <label>Revenu (€):</label>
+            <label>Revenu (chiffres/lettres):</label>
             <input 
-                type="number" name="revenu" 
+                type="text" name="revenu" 
                 value={formData.revenu} onChange={handleChange} 
+                placeholder="Ex: 1500 / mille cinq cents"
                 disabled={!isAdmin} 
-            />
-
-            <label>Revenu (en toutes lettres):</label>
-            <textarea
-                name="revenu_lettres"
-                value={formData.revenu_lettres}
-                onChange={handleChange}
-                disabled={!isAdmin}
             />
           </section>
 
