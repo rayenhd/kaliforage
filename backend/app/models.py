@@ -24,27 +24,24 @@ class TypeIntervention(str, Enum):
     ASSAINISSEMENT = "🔴 Etude d’assainissement"
     AUTRE = "⚫ Autre.."
 
-class Visibilite(str, Enum):
-    FONDASOLUTION = "FONDASOLUTION"
-    KALIFORAGE_INGENIERIE = "KALIFORAGE INGENIERIE"
-
 class DemandeBase(BaseModel):
     date_demande: Optional[datetime] = None
-    adresse_chantier: str
-    nom_client: str
-    telephone: str
-    email: str
-    adresse_facturation: str
-    type_intervention: List[str]
+    adresse_chantier: Optional[str] = None
+    nom_client: Optional[str] = None
+    telephone: Optional[str] = None
+    email: Optional[str] = None
+    adresse_facturation: Optional[str] = None
+    type_intervention: List[str] = Field(default_factory=list)
     description: Optional[str] = None
     etat: EtatDemande = EtatDemande.EN_ATTENTE
     date_sondage_prevue: Optional[datetime] = None
     date_remise_rapport_prevue: Optional[datetime] = None
     montant_chantier: float = 0.0
     type_revenu: List[TypeRevenu] = Field(default_factory=list)
-    revenu: float = 0.0
+    revenu: Optional[float] = None
+    revenu_lettres: Optional[str] = None
     commentaire: Optional[str] = None
-    visibilite: List[Visibilite] = Field(default_factory=list)
+    visibilite: List[str] = Field(default_factory=list)
 
     @field_validator("type_revenu", mode="before")
     @classmethod
@@ -72,8 +69,9 @@ class DemandeUpdate(BaseModel):
     montant_chantier: Optional[float] = None
     type_revenu: Optional[List[TypeRevenu]] = None
     revenu: Optional[float] = None
+    revenu_lettres: Optional[str] = None
     commentaire: Optional[str] = None
-    visibilite: Optional[List[Visibilite]] = None
+    visibilite: Optional[List[str]] = None
 
     @field_validator("type_revenu", mode="before")
     @classmethod
@@ -107,6 +105,7 @@ class DemandeEntrepriseUpdate(BaseModel):
     montant_chantier: Optional[float] = None
     type_revenu: Optional[List[TypeRevenu]] = None
     revenu: Optional[float] = None
+    revenu_lettres: Optional[str] = None
     commentaire: Optional[str] = None
 
     @field_validator("type_revenu", mode="before")
@@ -121,12 +120,31 @@ class Demande(DemandeBase):
 
 class UserRole(str, Enum):
     ADMIN = "ADMIN"
-    FONDASOLUTION = "FONDASOLUTION"
-    KALIFORAGE_INGENIERIE = "KALIFORAGE INGENIERIE"
 
 class UserInfo(BaseModel):
     email: EmailStr
-    role: UserRole
+    role: str
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("role must not be empty")
+        return cleaned
+
+class Entreprise(BaseModel):
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("name must not be empty")
+        if cleaned.upper() == "ADMIN":
+            raise ValueError("ADMIN is reserved")
+        return cleaned
 
 class UserCreate(UserInfo):
     pass

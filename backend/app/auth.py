@@ -1,7 +1,7 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from firebase_admin import auth, firestore
-from .models import UserInfo, UserRole
+from .models import UserInfo
 import logging
 
 security = HTTPBearer()
@@ -32,7 +32,7 @@ async def get_current_user(res: HTTPAuthorizationCredentials = Depends(security)
         user_data = user_doc.to_dict()
         role = user_data.get("role")
         
-        return UserInfo(email=email, role=UserRole(role))
+        return UserInfo(email=email, role=role)
         
     except Exception as e:
         logging.error(f"Auth error: {e}")
@@ -42,7 +42,7 @@ async def get_current_user(res: HTTPAuthorizationCredentials = Depends(security)
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-def require_role(allowed_roles: list[UserRole]):
+def require_role(allowed_roles: list[str]):
     async def role_checker(current_user: UserInfo = Depends(get_current_user)):
         if current_user.role not in allowed_roles:
             raise HTTPException(

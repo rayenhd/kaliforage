@@ -27,7 +27,38 @@ const TYPES_INTERVENTION = [
   "⚫ Autre..",
 ];
 
-const VISIBILITES = ["FONDASOLUTION", "KALIFORAGE INGENIERIE"];
+const formatApiError = (err) => {
+  const detail = err?.response?.data?.detail;
+
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    const lines = detail
+      .map((item) => {
+        if (typeof item === "string") {
+          return item;
+        }
+        if (item && typeof item === "object") {
+          const field = Array.isArray(item.loc) ? item.loc.join(".") : "champ inconnu";
+          const message = item.msg || "valeur invalide";
+          return `${field}: ${message}`;
+        }
+        return null;
+      })
+      .filter(Boolean);
+    if (lines.length > 0) {
+      return lines.join(" | ");
+    }
+  }
+
+  if (detail && typeof detail === "object") {
+    return detail.msg || JSON.stringify(detail);
+  }
+
+  return "Impossible d'enregistrer la demande. Vérifiez les champs et réessayez.";
+};
 
 const AdminForm = () => {
   const { id } = useParams();
@@ -49,19 +80,28 @@ const AdminForm = () => {
     date_remise_rapport_prevue: "",
     montant_chantier: 0,
     type_revenu: [],
-    revenu: 0,
+    revenu: "",
+    revenu_lettres: "",
     commentaire: "",
     visibilite: [],
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [entreprises, setEntreprises] = useState([]);
 
   useEffect(() => {
-    if (id) {
-      const fetchDemande = async () => {
-        try {
-          const token = await user.getIdToken();
+    if (!user) return;
+
+    const fetchFormData = async () => {
+      try {
+        const token = await user.getIdToken();
+        const entreprisesRes = await axios.get(`${process.env.REACT_APP_API_URL}/entreprises`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setEntreprises(Array.isArray(entreprisesRes.data) ? entreprisesRes.data.map((e) => e.name) : []);
+
+        if (id) {
           const res = await axios.get(`${process.env.REACT_APP_API_URL}/demandes`, {
             headers: { Authorization: `Bearer ${token}` }
           });
@@ -78,15 +118,18 @@ const AdminForm = () => {
                 : current.type_revenu
                   ? [current.type_revenu]
                   : [],
+              revenu: current.revenu ?? "",
+              revenu_lettres: current.revenu_lettres || "",
             };
             setFormData(formatted);
           }
-        } catch (error) {
-          console.error("Fetch demande error", error);
         }
-      };
-      fetchDemande();
-    }
+      } catch (fetchError) {
+        console.error("Fetch form data error", fetchError);
+      }
+    };
+
+    fetchFormData();
   }, [id, user]);
 
   const handleChange = (e) => {
@@ -112,12 +155,22 @@ const AdminForm = () => {
 
     try {
       const token = await user.getIdToken();
+      const normalizedPayload = {
+        ...formData,
+        date_demande: formData.date_demande || null,
+        date_sondage_prevue: formData.date_sondage_prevue || null,
+        date_remise_rapport_prevue: formData.date_remise_rapport_prevue || null,
+        revenu:
+          formData.revenu === "" || formData.revenu === null || formData.revenu === undefined
+            ? null
+            : Number(formData.revenu),
+      };
       if (id) {
         // Update
-        const payload = isAdmin ? formData : {
+        const payload = isAdmin ? normalizedPayload : {
             etat: formData.etat,
-            date_sondage_prevue: formData.date_sondage_prevue,
-            date_remise_rapport_prevue: formData.date_remise_rapport_prevue,
+            date_sondage_prevue: normalizedPayload.date_sondage_prevue,
+            date_remise_rapport_prevue: normalizedPayload.date_remise_rapport_prevue,
             montant_chantier: formData.montant_chantier,
             commentaire: formData.commentaire,
         };
@@ -126,13 +179,13 @@ const AdminForm = () => {
         });
       } else {
         // Create (Admin only)
-        await axios.post(`${process.env.REACT_APP_API_URL}/demandes`, formData, {
+        await axios.post(`${process.env.REACT_APP_API_URL}/demandes`, normalizedPayload, {
           headers: { Authorization: `Bearer ${token}` }
         });
       }
       navigate("/");
     } catch (err) {
-      setError(err.response?.data?.detail || "An error occurred");
+      setError(formatApiError(err));
     } finally {
       setLoading(false);
     }
@@ -152,42 +205,42 @@ const AdminForm = () => {
             <input 
                 type="date" name="date_demande" 
                 value={formData.date_demande} onChange={handleChange} 
-                disabled={!isAdmin} required 
+                disabled={!isAdmin}
             />
 
             <label>Adresse du chantier:</label>
             <input 
                 type="text" name="adresse_chantier" 
                 value={formData.adresse_chantier} onChange={handleChange} 
-                disabled={!isAdmin} required 
+                disabled={!isAdmin}
             />
 
             <label>Nom du client:</label>
             <input 
                 type="text" name="nom_client" 
                 value={formData.nom_client} onChange={handleChange} 
-                disabled={!isAdmin} required 
+                disabled={!isAdmin}
             />
 
             <label>Téléphone:</label>
             <input 
                 type="text" name="telephone" 
                 value={formData.telephone} onChange={handleChange} 
-                disabled={!isAdmin} required 
+                disabled={!isAdmin}
             />
 
             <label>Email:</label>
             <input 
                 type="email" name="email" 
                 value={formData.email} onChange={handleChange} 
-                disabled={!isAdmin} required 
+                disabled={!isAdmin}
             />
 
             <label>Adresse de facturation:</label>
             <textarea 
                 name="adresse_facturation" 
                 value={formData.adresse_facturation} onChange={handleChange} 
-                disabled={!isAdmin} required 
+                disabled={!isAdmin}
             />
           </section>
 
@@ -200,7 +253,7 @@ const AdminForm = () => {
                 <label key={type}>
                   <input 
                     type="checkbox" 
-                    checked={formData.type_intervention.includes(type)}
+                    checked={Array.isArray(formData.type_intervention) && formData.type_intervention.includes(type)}
                     onChange={() => handleCheckboxChange("type_intervention", type)}
                     disabled={!isAdmin}
                   /> {type}
@@ -234,6 +287,14 @@ const AdminForm = () => {
                 type="number" name="revenu" 
                 value={formData.revenu} onChange={handleChange} 
                 disabled={!isAdmin} 
+            />
+
+            <label>Revenu (en toutes lettres):</label>
+            <textarea
+                name="revenu_lettres"
+                value={formData.revenu_lettres}
+                onChange={handleChange}
+                disabled={!isAdmin}
             />
           </section>
 
@@ -275,11 +336,11 @@ const AdminForm = () => {
               <h3>Visibilité</h3>
               <p>Qui peut voir ces infos ?</p>
               <div className="checkbox-group">
-                {VISIBILITES.map(v => (
+                {entreprises.map(v => (
                   <label key={v}>
                     <input 
                       type="checkbox" 
-                      checked={formData.visibilite.includes(v)}
+                      checked={Array.isArray(formData.visibilite) && formData.visibilite.includes(v)}
                       onChange={() => handleCheckboxChange("visibilite", v)}
                     /> {v}
                   </label>

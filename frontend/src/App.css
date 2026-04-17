@@ -219,6 +219,12 @@ th {
   background-color: #eef5ff;
 }
 
+.actions-cell {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .users-table tbody tr:nth-child(even) {
   background-color: #fafcff;
 }
@@ -359,11 +365,43 @@ textarea:focus {
   margin-bottom: 16px;
 }
 
+.add-company-section {
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
 .add-user-section form {
   display: grid;
   grid-template-columns: 2fr 1fr auto;
   gap: 10px;
   align-items: end;
+}
+
+.add-company-section form {
+  display: grid;
+  grid-template-columns: 2fr auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.company-list {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.company-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
 }
 
 .cell-modal-overlay {
@@ -464,6 +502,10 @@ textarea:focus {
   }
 
   .add-user-section form {
+    grid-template-columns: 1fr;
+  }
+
+  .add-company-section form {
     grid-template-columns: 1fr;
   }
 

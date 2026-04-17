@@ -23,11 +23,7 @@ const TYPES_INTERVENTION = [
   "🔴 Etude d’assainissement",
   "⚫ Autre..",
 ];
-const VISIBILITES = ["FONDASOLUTION", "KALIFORAGE INGENIERIE"];
-
-const COMPANY_ROLES = ["FONDASOLUTION", "KALIFORAGE INGENIERIE"];
-
-const FIELD_CONFIG = {
+const buildFieldConfig = (entreprises) => ({
   date_demande: { label: "Date demande", type: "date" },
   adresse_chantier: { label: "Adresse chantier", type: "textarea" },
   nom_client: { label: "Client", type: "text" },
@@ -42,19 +38,25 @@ const FIELD_CONFIG = {
   montant_chantier: { label: "Montant chantier", type: "number" },
   type_revenu: { label: "Type revenu", type: "multiselect", options: TYPES_REVENU },
   revenu: { label: "Revenu", type: "number" },
+  revenu_lettres: { label: "Revenu en lettres", type: "textarea" },
   commentaire: { label: "Commentaire", type: "textarea" },
-  visibilite: { label: "Visibilité", type: "multiselect", options: VISIBILITES },
-};
+  visibilite: { label: "Visibilité", type: "multiselect", options: entreprises },
+});
 
 const Dashboard = () => {
   const { user, role, logout } = useAuth();
   const [demandes, setDemandes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [adminFilter, setAdminFilter] = useState("ALL");
+  const [selectedAdminFilters, setSelectedAdminFilters] = useState([]);
   const [editingCell, setEditingCell] = useState(null);
   const [editValue, setEditValue] = useState("");
   const [savingCell, setSavingCell] = useState(false);
   const [cellError, setCellError] = useState("");
+  const [entreprises, setEntreprises] = useState([]);
+  const [newEntreprise, setNewEntreprise] = useState("");
+  const [companyError, setCompanyError] = useState("");
+
+  const fieldConfig = useMemo(() => buildFieldConfig(entreprises), [entreprises]);
 
   const fetchDemandes = useCallback(async () => {
     if (!user) {
@@ -64,6 +66,13 @@ const Dashboard = () => {
 
     try {
       const token = await user.getIdToken();
+      const entreprisesRes = await axios.get(`${process.env.REACT_APP_API_URL}/entreprises`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setEntreprises(
+        Array.isArray(entreprisesRes.data) ? entreprisesRes.data.map((e) => e.name) : []
+      );
+
       const res = await axios.get(`${process.env.REACT_APP_API_URL}/demandes`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -103,16 +112,16 @@ const Dashboard = () => {
   const canEditField = useCallback(
     (field) => {
       if (role === "ADMIN") return true;
-      if (!COMPANY_ROLES.includes(role)) return false;
+      if (!entreprises.includes(role)) return false;
       return field !== "visibilite";
     },
-    [role]
+    [role, entreprises]
   );
 
   const openCellEditor = (demande, field) => {
     if (!canEditField(field)) return;
 
-    const config = FIELD_CONFIG[field];
+    const config = fieldConfig[field];
     if (!config) return;
 
     let initialValue = demande[field];
@@ -123,7 +132,7 @@ const Dashboard = () => {
       initialValue = Array.isArray(initialValue) ? initialValue : initialValue ? [initialValue] : [];
     }
     if (config.type === "number") {
-      initialValue = initialValue ?? 0;
+      initialValue = initialValue ?? "";
     }
 
     setCellError("");
@@ -152,8 +161,12 @@ const Dashboard = () => {
     let valueToSend = editValue;
 
     if (config.type === "number") {
-      valueToSend = Number(editValue);
-      if (Number.isNaN(valueToSend)) {
+      if (editValue === "" || editValue === null || editValue === undefined) {
+        valueToSend = null;
+      } else {
+        valueToSend = Number(editValue);
+      }
+      if (valueToSend !== null && Number.isNaN(valueToSend)) {
         setCellError("Valeur numérique invalide.");
         return;
       }
@@ -182,14 +195,93 @@ const Dashboard = () => {
     }
   };
 
+  const deleteDemande = async (demandeId) => {
+    if (role !== "ADMIN" || !user) return;
+
+    const shouldDelete = window.confirm("Confirmer la suppression de cette demande ?");
+    if (!shouldDelete) return;
+
+    try {
+      const token = await user.getIdToken();
+      await axios.delete(`${process.env.REACT_APP_API_URL}/demandes/${demandeId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setDemandes((prev) => prev.filter((d) => d.id !== demandeId));
+    } catch (error) {
+      const message =
+        typeof error.response?.data?.detail === "string"
+          ? error.response.data.detail
+          : "Impossible de supprimer cette demande.";
+      window.alert(message);
+    }
+  };
+
+  const addEntreprise = async (e) => {
+    e.preventDefault();
+    if (role !== "ADMIN" || !user) return;
+
+    const name = newEntreprise.trim();
+    if (!name) {
+      setCompanyError("Le nom de l'entreprise est requis.");
+      return;
+    }
+
+    try {
+      setCompanyError("");
+      const token = await user.getIdToken();
+      await axios.post(
+        `${process.env.REACT_APP_API_URL}/entreprises`,
+        { name },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setNewEntreprise("");
+      await fetchDemandes();
+    } catch (error) {
+      const message =
+        typeof error.response?.data?.detail === "string"
+          ? error.response.data.detail
+          : "Impossible d'ajouter cette entreprise.";
+      setCompanyError(message);
+    }
+  };
+
+  const deleteEntreprise = async (name) => {
+    if (role !== "ADMIN" || !user) return;
+    const shouldDelete = window.confirm(`Confirmer la suppression de l'entreprise "${name}" ?`);
+    if (!shouldDelete) return;
+
+    try {
+      setCompanyError("");
+      const token = await user.getIdToken();
+      await axios.delete(`${process.env.REACT_APP_API_URL}/entreprises/${encodeURIComponent(name)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setSelectedAdminFilters((prev) => prev.filter((value) => value !== name));
+      await fetchDemandes();
+    } catch (error) {
+      const message =
+        typeof error.response?.data?.detail === "string"
+          ? error.response.data.detail
+          : "Impossible de supprimer cette entreprise.";
+      setCompanyError(message);
+    }
+  };
+
+  const toggleAdminFilter = (name) => {
+    setSelectedAdminFilters((prev) =>
+      prev.includes(name) ? prev.filter((value) => value !== name) : [...prev, name]
+    );
+  };
+
   const filteredDemandes = useMemo(
     () =>
       demandes.filter((d) => {
-        if (role !== "ADMIN" || adminFilter === "ALL") return true;
+        if (role !== "ADMIN") return true;
+        if (selectedAdminFilters.length === 0) return true;
         if (!Array.isArray(d.visibilite)) return false;
-        return d.visibilite.includes(adminFilter);
+        return d.visibilite.some((v) => selectedAdminFilters.includes(v));
       }),
-    [adminFilter, demandes, role]
+    [selectedAdminFilters, demandes, role]
   );
 
   const editableClass = (field) => (canEditField(field) ? "editable-cell" : "readonly-cell");
@@ -215,25 +307,42 @@ const Dashboard = () => {
 
       {role === "ADMIN" && (
         <div className="dashboard-nav dashboard-filter-nav">
-          <button
-            onClick={() => setAdminFilter("ALL")}
-            className={adminFilter === "ALL" ? "btn-primary" : "btn-secondary"}
-          >
-            Les 2
-          </button>
-          <button
-            onClick={() => setAdminFilter("FONDASOLUTION")}
-            className={adminFilter === "FONDASOLUTION" ? "btn-primary" : "btn-secondary"}
-          >
-            FONDASOLUTION
-          </button>
-          <button
-            onClick={() => setAdminFilter("KALIFORAGE INGENIERIE")}
-            className={adminFilter === "KALIFORAGE INGENIERIE" ? "btn-primary" : "btn-secondary"}
-          >
-            KALIFORAGE INGENIERIE
-          </button>
+          {entreprises.map((entrepriseName) => (
+            <button
+              key={entrepriseName}
+              onClick={() => toggleAdminFilter(entrepriseName)}
+              className={selectedAdminFilters.includes(entrepriseName) ? "btn-primary" : "btn-secondary"}
+            >
+              {entrepriseName}
+            </button>
+          ))}
         </div>
+      )}
+
+      {role === "ADMIN" && (
+        <section className="add-company-section">
+          <h3>Ajouter une entreprise</h3>
+          <form onSubmit={addEntreprise}>
+            <input
+              type="text"
+              placeholder="Nom de l'entreprise"
+              value={newEntreprise}
+              onChange={(e) => setNewEntreprise(e.target.value)}
+            />
+            <button type="submit" className="btn-primary">Ajouter</button>
+          </form>
+          <div className="company-list">
+            {entreprises.map((name) => (
+              <div key={name} className="company-list-item">
+                <span>{name}</span>
+                <button type="button" className="btn-small btn-danger" onClick={() => deleteEntreprise(name)}>
+                  Supprimer
+                </button>
+              </div>
+            ))}
+          </div>
+          {companyError && <p className="error">{companyError}</p>}
+        </section>
       )}
 
       {loading ? (
@@ -258,6 +367,7 @@ const Dashboard = () => {
                 <th>Montant Chantier</th>
                 <th>Type Revenu</th>
                 <th>Revenu</th>
+                <th>Revenu (lettres)</th>
                 <th>Commentaire</th>
                 <th>Visibilité</th>
                 <th>Actions</th>
@@ -266,7 +376,7 @@ const Dashboard = () => {
             <tbody>
               {filteredDemandes.length === 0 && (
                 <tr>
-                  <td colSpan="18" className="empty-table-cell">
+                  <td colSpan="19" className="empty-table-cell">
                     Aucune demande pour ce filtre.
                   </td>
                 </tr>
@@ -292,6 +402,7 @@ const Dashboard = () => {
                       : d.type_revenu || "-"}
                   </td>
                   <td className={editableClass("revenu")} onClick={() => openCellEditor(d, "revenu")}>{formatCurrency(d.revenu)}</td>
+                  <td className={`cell-long ${editableClass("revenu_lettres")}`} onClick={() => openCellEditor(d, "revenu_lettres")}>{d.revenu_lettres || "-"}</td>
                   <td className={`cell-long ${editableClass("commentaire")}`} onClick={() => openCellEditor(d, "commentaire")}>{d.commentaire || "-"}</td>
                   <td className={editableClass("visibilite")} onClick={() => openCellEditor(d, "visibilite")}>
                     {Array.isArray(d.visibilite) && d.visibilite.length > 0 ? (
@@ -300,10 +411,15 @@ const Dashboard = () => {
                       "-"
                     )}
                   </td>
-                  <td>
+                  <td className="actions-cell">
                     <Link to={`/edit/${d.id}`} className="btn-small">
                       {role === "ADMIN" ? "Modifier" : "Modifier (BE)"}
                     </Link>
+                    {role === "ADMIN" && (
+                      <button type="button" className="btn-small btn-danger" onClick={() => deleteDemande(d.id)}>
+                        Supprimer
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

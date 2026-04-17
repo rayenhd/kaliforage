@@ -3,12 +3,11 @@ import axios from "axios";
 import { useAuth } from "../AuthContext";
 import { Link } from "react-router-dom";
 
-const ROLES = ["ADMIN", "FONDASOLUTION", "KALIFORAGE INGENIERIE"];
-
 const UserManagement = () => {
   const { user } = useAuth();
   const [users, setUsers] = useState([]);
-  const [newUser, setNewUser] = useState({ email: "", role: ROLES[1] });
+  const [roles, setRoles] = useState(["ADMIN"]);
+  const [newUser, setNewUser] = useState({ email: "", role: "ADMIN" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -20,6 +19,19 @@ const UserManagement = () => {
 
     try {
       const token = await user.getIdToken();
+      const entreprisesRes = await axios.get(`${process.env.REACT_APP_API_URL}/entreprises`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const entrepriseRoles = Array.isArray(entreprisesRes.data)
+        ? entreprisesRes.data.map((e) => e.name)
+        : [];
+      const availableRoles = ["ADMIN", ...entrepriseRoles];
+      setRoles(availableRoles);
+      setNewUser((prev) => ({
+        ...prev,
+        role: availableRoles.includes(prev.role) ? prev.role : (entrepriseRoles[0] || "ADMIN")
+      }));
+
       const res = await axios.get(`${process.env.REACT_APP_API_URL}/users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -43,7 +55,7 @@ const UserManagement = () => {
       await axios.post(`${process.env.REACT_APP_API_URL}/users`, newUser, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setNewUser({ email: "", role: ROLES[1] });
+      setNewUser((prev) => ({ email: "", role: prev.role || roles[0] || "ADMIN" }));
       fetchUsers();
     } catch (err) {
       setError("Failed to add user");
@@ -76,12 +88,11 @@ const UserManagement = () => {
           <input 
             type="email" placeholder="Email Google" 
             value={newUser.email} onChange={(e) => setNewUser({...newUser, email: e.target.value})}
-            required
           />
           <select 
             value={newUser.role} onChange={(e) => setNewUser({...newUser, role: e.target.value})}
           >
-            {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+            {roles.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
           <button type="submit" className="btn-primary">Ajouter</button>
         </form>

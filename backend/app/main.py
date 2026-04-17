@@ -29,11 +29,25 @@ if not firebase_admin._apps:
 
 from .models import (
     Demande, DemandeCreate, DemandeUpdate, DemandeEntrepriseUpdate,
-    UserInfo, UserRole, UserCreate
+    UserInfo, UserRole, UserCreate, Entreprise
 )
 from .auth import get_current_user, require_role
 
 db = firestore.client()
+DEFAULT_ENTREPRISES = ["FONDASOLUTION", "KALIFORAGE INGENIERIE"]
+
+def get_entreprise_names() -> List[str]:
+    docs = db.collection("entreprises").stream()
+    dynamic_names = {doc.id for doc in docs if doc.id}
+    return sorted(set(DEFAULT_ENTREPRISES) | dynamic_names)
+
+def entreprise_is_used(name: str) -> bool:
+    user_docs = db.collection("users").where("role", "==", name).limit(1).stream()
+    if any(True for _ in user_docs):
+        return True
+
+    demande_docs = db.collection("demandes").where("visibilite", "array_contains", name).limit(1).stream()
+    return any(True for _ in demande_docs)
 
 app = FastAPI(title="Kaliforage Management API")
 
@@ -71,13 +85,11 @@ async def get_me(current_user: UserInfo = Depends(get_current_user)):
 async def list_demandes(current_user: UserInfo = Depends(get_current_user)):
     demandes_ref = db.collection("demandes")
     
-    if current_user.role == UserRole.ADMIN:
+    if current_user.role == UserRole.ADMIN.value:
         docs = demandes_ref.stream()
     else:
         # Filter by visibility for BE users
-        # BE FONDASOLUTION sees requests where "visibilite" contains "FONDASOLUTION"
-        # BE KALIFORAGE INGENIERIE sees requests where "visibilite" contains "KALIFORAGE INGENIERIE"
-        docs = demandes_ref.where("visibilite", "array_contains", current_user.role.value).stream()
+        docs = demandes_ref.where("visibilite", "array_contains", current_user.role).stream()
     
     results = []
     for doc in docs:
@@ -90,7 +102,7 @@ async def list_demandes(current_user: UserInfo = Depends(get_current_user)):
 @app.post("/api/demandes", response_model=Demande)
 async def create_demande(
     demande: DemandeCreate, 
-    current_user: UserInfo = Depends(require_role([UserRole.ADMIN]))
+    current_user: UserInfo = Depends(require_role([UserRole.ADMIN.value]))
 ):
     demande_data = demande.dict()
     # Add auto-increment ID logic if needed, otherwise use Firestore's ID
@@ -112,7 +124,7 @@ async def update_demande(
     
     demande_data = doc.to_dict()
     
-    if current_user.role == UserRole.ADMIN:
+    if current_user.role == UserRole.ADMIN.value:
         # Full update allowed
         # Validate with DemandeUpdate model
         try:
@@ -123,7 +135,7 @@ async def update_demande(
             raise HTTPException(status_code=400, detail=str(e))
     else:
         # BE User: check if they have visibility
-        if current_user.role.value not in demande_data.get("visibilite", []):
+        if current_user.role not in demande_data.get("visibilite", []):
             raise HTTPException(status_code=403, detail="Not authorized to edit this demande")
         
         # Company users can update visible demandes (except visibility field).
@@ -140,7 +152,7 @@ async def update_demande(
 @app.delete("/api/demandes/{demande_id}")
 async def delete_demande(
     demande_id: str,
-    current_user: UserInfo = Depends(require_role([UserRole.ADMIN]))
+    current_user: UserInfo = Depends(require_role([UserRole.ADMIN.value]))
 ):
     db.collection("demandes").document(demande_id).delete()
     return {"message": "Deleted successfully"}
@@ -148,25 +160,60 @@ async def delete_demande(
 # --- USER MANAGEMENT ROUTES ---
 
 @app.get("/api/users", response_model=List[UserInfo])
-async def list_users(current_user: UserInfo = Depends(require_role([UserRole.ADMIN]))):
+async def list_users(current_user: UserInfo = Depends(require_role([UserRole.ADMIN.value]))):
     docs = db.collection("users").stream()
     return [UserInfo(email=doc.id, role=doc.to_dict()["role"]) for doc in docs]
 
 @app.post("/api/users", response_model=UserInfo)
 async def create_user(
     user: UserCreate,
-    current_user: UserInfo = Depends(require_role([UserRole.ADMIN]))
+    current_user: UserInfo = Depends(require_role([UserRole.ADMIN.value]))
 ):
-    db.collection("users").document(user.email).set({"role": user.role.value})
+    if user.role != UserRole.ADMIN.value and user.role not in get_entreprise_names():
+        raise HTTPException(status_code=400, detail="Unknown role. Create the entreprise first.")
+    db.collection("users").document(user.email).set({"role": user.role})
     return user
 
 @app.delete("/api/users/{email}")
 async def delete_user(
     email: str,
-    current_user: UserInfo = Depends(require_role([UserRole.ADMIN]))
+    current_user: UserInfo = Depends(require_role([UserRole.ADMIN.value]))
 ):
     db.collection("users").document(email).delete()
     return {"message": "User deleted"}
+
+@app.get("/api/entreprises", response_model=List[Entreprise])
+async def list_entreprises(current_user: UserInfo = Depends(get_current_user)):
+    return [Entreprise(name=name) for name in get_entreprise_names()]
+
+@app.post("/api/entreprises", response_model=Entreprise)
+async def create_entreprise(
+    entreprise: Entreprise,
+    current_user: UserInfo = Depends(require_role([UserRole.ADMIN.value])),
+):
+    db.collection("entreprises").document(entreprise.name).set({"name": entreprise.name})
+    return entreprise
+
+@app.delete("/api/entreprises/{entreprise_name}")
+async def delete_entreprise(
+    entreprise_name: str,
+    current_user: UserInfo = Depends(require_role([UserRole.ADMIN.value])),
+):
+    if entreprise_name in DEFAULT_ENTREPRISES:
+        raise HTTPException(status_code=400, detail="Cette entreprise par défaut ne peut pas être supprimée.")
+
+    if entreprise_is_used(entreprise_name):
+        raise HTTPException(
+            status_code=400,
+            detail="Impossible de supprimer: entreprise encore utilisée dans des utilisateurs ou des demandes.",
+        )
+
+    doc_ref = db.collection("entreprises").document(entreprise_name)
+    if not doc_ref.get().exists:
+        raise HTTPException(status_code=404, detail="Entreprise introuvable")
+
+    doc_ref.delete()
+    return {"message": "Entreprise supprimée"}
 
 # --- INITIALIZATION ROUTE (DEBUG/FIRST RUN) ---
 
