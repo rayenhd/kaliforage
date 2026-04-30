@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../AuthContext";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { storage } from "../firebase";
 
 const ETATS = [
   "🟡 En attente",
@@ -27,6 +29,109 @@ const TYPES_INTERVENTION = [
   "🔴 Etude d’assainissement",
   "⚫ Autre..",
 ];
+
+const EMAIL_LABELS = [
+  ["vous_etes", /^vous\s*[ée]tes\s*:?\s*(.*)$/i],
+  ["prenom", /^pr[ée]nom\s*:?\s*(.*)$/i],
+  ["nom", /^nom\s*:?\s*(.*)$/i],
+  ["adresse_personnel", /^adresse\s+personnel(?:le)?\s*:?\s*(.*)$/i],
+  ["email", /^e?-?mail\s*:?\s*(.*)$/i],
+  ["telephone", /^t[ée]l[ée]phone\s*:?\s*(.*)$/i],
+  ["adresse_parcelle", /^adresse\s+parcelle\s*:?\s*(.*)$/i],
+  ["ville", /^ville\s*:?\s*(.*)$/i],
+  ["code_postal", /^code\s+postale?\s*:?\s*(.*)$/i],
+  ["section_cadastrale", /^section\s+cadastrale.*?:?\s*(.*)$/i],
+  ["numero_cadastrale", /^n[°o]?\s*cadastrale.*?:?\s*(.*)$/i],
+  ["superficie", /^superficie.*m2\s*:?\s*(.*)$/i],
+  ["message", /^message\s*:?\s*(.*)$/i],
+];
+
+const EMAIL_STOP_PATTERNS = [
+  /^j['']accepte/i,
+  /^charger un fichier/i,
+  /^formulaire personnalis/i,
+  /^r[ée]pondez directement/i,
+  /^voir toutes vos r[ée]ponses/i,
+];
+
+const parseEmailContent = (text) => {
+  const lines = text
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const result = {};
+  let currentKey = null;
+  let buffer = [];
+
+  const flush = () => {
+    if (currentKey && buffer.length > 0) {
+      const value = buffer.join(" ").trim();
+      result[currentKey] = result[currentKey]
+        ? `${result[currentKey]} ${value}`.trim()
+        : value;
+    }
+    buffer = [];
+  };
+
+  for (const line of lines) {
+    if (EMAIL_STOP_PATTERNS.some((p) => p.test(line))) {
+      flush();
+      currentKey = null;
+      continue;
+    }
+
+    let matched = false;
+    for (const [key, regex] of EMAIL_LABELS) {
+      const m = line.match(regex);
+      if (m) {
+        flush();
+        currentKey = key;
+        const inline = m[1] ? m[1].trim() : "";
+        if (inline) buffer.push(inline);
+        matched = true;
+        break;
+      }
+    }
+
+    if (!matched && currentKey) {
+      buffer.push(line);
+    }
+  }
+  flush();
+  return result;
+};
+
+const mapEmailToForm = (parsed) => {
+  const nomClient = [parsed.prenom, parsed.nom].filter(Boolean).join(" ").trim();
+
+  const adresseChantier = [
+    parsed.adresse_parcelle,
+    parsed.ville,
+    parsed.code_postal,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  const commentaireParts = [];
+  if (parsed.section_cadastrale)
+    commentaireParts.push(`Section cadastrale: ${parsed.section_cadastrale}`);
+  if (parsed.numero_cadastrale)
+    commentaireParts.push(`N° cadastrale: ${parsed.numero_cadastrale}`);
+  if (parsed.superficie)
+    commentaireParts.push(`Superficie: ${parsed.superficie} m²`);
+
+  return {
+    nom_client: nomClient,
+    email: parsed.email || "",
+    telephone: parsed.telephone || "",
+    adresse_facturation: parsed.adresse_personnel || "",
+    adresse_chantier: adresseChantier,
+    description: parsed.message || "",
+    commentaire: commentaireParts.join("\n"),
+  };
+};
 
 const formatApiError = (err) => {
   const detail = err?.response?.data?.detail;
@@ -84,11 +189,16 @@ const AdminForm = () => {
     revenu: "",
     commentaire: "",
     visibilite: [],
+    file_url: null,
   });
 
+  const [selectedFile, setSelectedFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [entreprises, setEntreprises] = useState([]);
+  const [creationStep, setCreationStep] = useState(id ? "form" : "choice");
+  const [emailText, setEmailText] = useState("");
+  const [importNotice, setImportNotice] = useState("");
 
   useEffect(() => {
     if (!user) return;
@@ -119,6 +229,7 @@ const AdminForm = () => {
                   ? [current.type_revenu]
                   : [],
               revenu: current.revenu ?? "",
+              file_url: current.file_url ?? null,
             };
             setFormData(formatted);
           }
@@ -147,6 +258,33 @@ const AdminForm = () => {
     });
   };
 
+  const handleImportEmail = () => {
+    const parsed = parseEmailContent(emailText);
+    const mapped = mapEmailToForm(parsed);
+    const filledKeys = Object.entries(mapped)
+      .filter(([, v]) => v && String(v).trim().length > 0)
+      .map(([k]) => k);
+
+    if (filledKeys.length === 0) {
+      setImportNotice(
+        "Aucun champ détecté. Vérifiez que vous avez bien collé le contenu du mail."
+      );
+      return;
+    }
+
+    setFormData((prev) => ({ ...prev, ...mapped }));
+    setImportNotice(
+      `${filledKeys.length} champ(s) pré-rempli(s) — vérifiez et complétez avant d'enregistrer.`
+    );
+    setCreationStep("form");
+  };
+
+  const handleFileChange = (e) => {
+    if (e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -154,13 +292,24 @@ const AdminForm = () => {
 
     try {
       const token = await user.getIdToken();
+      let fileUrl = formData.file_url;
+
+      if (selectedFile) {
+        const folder = id || `temp_${Date.now()}`;
+        const fileRef = ref(storage, `demandes/${folder}/${selectedFile.name}`);
+        const snapshot = await uploadBytes(fileRef, selectedFile);
+        fileUrl = await getDownloadURL(snapshot.ref);
+      }
+
       const normalizedPayload = {
         ...formData,
         date_demande: formData.date_demande || null,
         date_sondage_prevue: formData.date_sondage_prevue || null,
         date_remise_rapport_prevue: formData.date_remise_rapport_prevue || null,
         revenu: formData.revenu ? String(formData.revenu).trim() : null,
+        file_url: fileUrl,
       };
+
       if (id) {
         // Update
         const payload = isAdmin ? normalizedPayload : {
@@ -169,6 +318,7 @@ const AdminForm = () => {
             date_remise_rapport_prevue: normalizedPayload.date_remise_rapport_prevue,
             montant_chantier: formData.montant_chantier,
             commentaire: formData.commentaire,
+            file_url: fileUrl,
         };
         await axios.put(`${process.env.REACT_APP_API_URL}/demandes/${id}`, payload, {
           headers: { Authorization: `Bearer ${token}` }
@@ -187,11 +337,81 @@ const AdminForm = () => {
     }
   };
 
+  if (!id && creationStep === "choice") {
+    return (
+      <div className="form-container">
+        <h2>Nouvelle Demande</h2>
+        <p>Comment souhaitez-vous saisir cette demande ?</p>
+        <div className="creation-choice">
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => setCreationStep("form")}
+          >
+            Saisir les champs à la main
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setCreationStep("paste")}
+          >
+            Importer depuis un mail
+          </button>
+        </div>
+        <div className="form-actions">
+          <Link to="/" className="btn-secondary">Annuler</Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!id && creationStep === "paste") {
+    return (
+      <div className="form-container">
+        <h2>Importer depuis un mail</h2>
+        <p>
+          Collez ci-dessous le contenu du mail reçu. Les champs reconnus seront
+          pré-remplis dans le formulaire — vous pourrez ensuite les compléter ou
+          les corriger avant d'enregistrer.
+        </p>
+        {importNotice && <p className="error">{importNotice}</p>}
+        <textarea
+          className="email-paste-area"
+          rows={18}
+          value={emailText}
+          onChange={(e) => setEmailText(e.target.value)}
+          placeholder="Collez ici le contenu complet du mail..."
+        />
+        <div className="form-actions">
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => {
+              setCreationStep("choice");
+              setImportNotice("");
+            }}
+          >
+            Retour
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={handleImportEmail}
+            disabled={!emailText.trim()}
+          >
+            Pré-remplir le formulaire
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="form-container">
       <h2>{id ? "Modifier la Demande" : "Nouvelle Demande"}</h2>
       {error && <p className="error">{error}</p>}
-      
+      {importNotice && !error && <p className="info-notice">{importNotice}</p>}
+
       <form onSubmit={handleSubmit}>
         <div className="form-grid">
           <section className="form-section">
@@ -318,6 +538,14 @@ const AdminForm = () => {
                 name="commentaire" 
                 value={formData.commentaire} onChange={handleChange} 
             />
+
+            <label>Fichier / Document:</label>
+            <input type="file" onChange={handleFileChange} />
+            {formData.file_url && (
+              <p className="file-link">
+                Fichier actuel: <a href={formData.file_url} target="_blank" rel="noopener noreferrer">Voir le document</a>
+              </p>
+            )}
           </section>
 
           {isAdmin && (

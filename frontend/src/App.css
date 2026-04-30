@@ -467,6 +467,59 @@ textarea:focus {
   font-weight: 700;
 }
 
+.info-notice {
+  background-color: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+.creation-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 18px 0 24px;
+}
+
+.email-paste-area {
+  width: 100%;
+  font-family: "Menlo", "Consolas", monospace;
+  font-size: 0.9rem;
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+  min-height: 280px;
+}
+
+.file-link, .current-file {
+  margin-top: 10px;
+  font-size: 0.9rem;
+  padding: 8px;
+  background-color: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: var(--radius-sm);
+  color: #0369a1;
+}
+
+.file-link a, .current-file a {
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.file-link a:hover, .current-file a:hover {
+  text-decoration: underline;
+}
+
+.file-upload-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .login-container {
   max-width: 480px;
   margin: 80px auto;

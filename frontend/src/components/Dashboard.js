@@ -3,6 +3,8 @@ import axios from "axios";
 import { useAuth } from "../AuthContext";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { storage } from "../firebase";
 
 const ETATS = [
   "🟡 En attente",
@@ -40,6 +42,7 @@ const buildFieldConfig = (entreprises) => ({
   revenu: { label: "Revenu", type: "text" },
   commentaire: { label: "Commentaire", type: "textarea" },
   visibilite: { label: "Visibilité", type: "multiselect", options: entreprises },
+  file_url: { label: "Fichier", type: "file" },
 });
 
 const Dashboard = () => {
@@ -49,6 +52,7 @@ const Dashboard = () => {
   const [selectedAdminFilters, setSelectedAdminFilters] = useState([]);
   const [editingCell, setEditingCell] = useState(null);
   const [editValue, setEditValue] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
   const [savingCell, setSavingCell] = useState(false);
   const [cellError, setCellError] = useState("");
   const [entreprises, setEntreprises] = useState([]);
@@ -135,6 +139,7 @@ const Dashboard = () => {
     }
 
     setCellError("");
+    setSelectedFile(null);
     setEditingCell({ demandeId: demande.id, field, config });
     setEditValue(initialValue ?? "");
   };
@@ -143,6 +148,7 @@ const Dashboard = () => {
     if (savingCell) return;
     setEditingCell(null);
     setEditValue("");
+    setSelectedFile(null);
     setCellError("");
   };
 
@@ -153,33 +159,43 @@ const Dashboard = () => {
     });
   };
 
+  const handleFileChange = (e) => {
+    if (e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+
   const saveCellValue = async () => {
     if (!editingCell || !user) return;
 
     const { demandeId, field, config } = editingCell;
     let valueToSend = editValue;
 
-    if (config.type === "number") {
-      if (editValue === "" || editValue === null || editValue === undefined) {
-        valueToSend = null;
-      } else {
-        valueToSend = Number(editValue);
-      }
-      if (valueToSend !== null && Number.isNaN(valueToSend)) {
-        setCellError("Valeur numérique invalide.");
-        return;
-      }
-    }
-
-    if (config.type === "date") {
-      valueToSend = editValue ? editValue : null;
-    }
-
-    const payload = { [field]: valueToSend };
-
     try {
       setSavingCell(true);
       setCellError("");
+
+      if (config.type === "file" && selectedFile) {
+        // Upload file to Firebase Storage
+        const fileRef = ref(storage, `demandes/${demandeId}/${selectedFile.name}`);
+        const snapshot = await uploadBytes(fileRef, selectedFile);
+        valueToSend = await getDownloadURL(snapshot.ref);
+      } else if (config.type === "number") {
+        if (editValue === "" || editValue === null || editValue === undefined) {
+          valueToSend = null;
+        } else {
+          valueToSend = Number(editValue);
+        }
+        if (valueToSend !== null && Number.isNaN(valueToSend)) {
+          setCellError("Valeur numérique invalide.");
+          setSavingCell(false);
+          return;
+        }
+      } else if (config.type === "date") {
+        valueToSend = editValue ? editValue : null;
+      }
+
+      const payload = { [field]: valueToSend };
       const token = await user.getIdToken();
       const res = await axios.put(`${process.env.REACT_APP_API_URL}/demandes/${demandeId}`, payload, {
         headers: { Authorization: `Bearer ${token}` },
@@ -368,13 +384,14 @@ const Dashboard = () => {
                 <th>Revenu</th>
                 <th>Commentaire</th>
                 <th>Visibilité</th>
+                <th>Fichier</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredDemandes.length === 0 && (
                 <tr>
-                  <td colSpan="18" className="empty-table-cell">
+                  <td colSpan="19" className="empty-table-cell">
                     Aucune demande pour ce filtre.
                   </td>
                 </tr>
@@ -406,6 +423,15 @@ const Dashboard = () => {
                       <span className="visibility-badge">{d.visibilite.join(", ")}</span>
                     ) : (
                       "-"
+                    )}
+                  </td>
+                  <td className={editableClass("file_url")} onClick={() => openCellEditor(d, "file_url")}>
+                    {d.file_url ? (
+                      <a href={d.file_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                        📄 Voir
+                      </a>
+                    ) : (
+                      <span style={{ opacity: 0.5 }}>-</span>
                     )}
                   </td>
                   <td className="actions-cell">
@@ -444,6 +470,17 @@ const Dashboard = () => {
 
             {editingCell.config.type === "date" && (
               <input type="date" value={editValue} onChange={(e) => setEditValue(e.target.value)} />
+            )}
+
+            {editingCell.config.type === "file" && (
+              <div className="file-upload-container">
+                <input type="file" onChange={handleFileChange} />
+                {editValue && (
+                  <p className="current-file">
+                    Fichier actuel: <a href={editValue} target="_blank" rel="noopener noreferrer">Voir le fichier</a>
+                  </p>
+                )}
+              </div>
             )}
 
             {editingCell.config.type === "select" && (

@@ -42,6 +42,7 @@ class DemandeBase(BaseModel):
     revenu: Optional[str] = None
     commentaire: Optional[str] = None
     visibilite: List[str] = Field(default_factory=list)
+    file_url: Optional[str] = None
 
     @field_validator("type_revenu", mode="before")
     @classmethod
@@ -71,6 +72,7 @@ class DemandeUpdate(BaseModel):
     revenu: Optional[str] = None
     commentaire: Optional[str] = None
     visibilite: Optional[List[str]] = None
+    file_url: Optional[str] = None
 
     @field_validator("type_revenu", mode="before")
     @classmethod
@@ -105,6 +107,7 @@ class DemandeEntrepriseUpdate(BaseModel):
     type_revenu: Optional[List[TypeRevenu]] = None
     revenu: Optional[str] = None
     commentaire: Optional[str] = None
+    file_url: Optional[str] = None
 
     @field_validator("type_revenu", mode="before")
     @classmethod
