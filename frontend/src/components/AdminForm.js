@@ -295,10 +295,17 @@ const AdminForm = () => {
       let fileUrl = formData.file_url;
 
       if (selectedFile) {
-        const folder = id || `temp_${Date.now()}`;
-        const fileRef = ref(storage, `demandes/${folder}/${selectedFile.name}`);
-        const snapshot = await uploadBytes(fileRef, selectedFile);
-        fileUrl = await getDownloadURL(snapshot.ref);
+        try {
+          const folder = id || `temp_${Date.now()}`;
+          const fileRef = ref(storage, `demandes/${folder}/${selectedFile.name}`);
+          const snapshot = await uploadBytes(fileRef, selectedFile);
+          fileUrl = await getDownloadURL(snapshot.ref);
+        } catch (uploadErr) {
+          console.error("Firebase upload error", uploadErr);
+          const code = uploadErr?.code || uploadErr?.name || "unknown";
+          const msg = uploadErr?.message || String(uploadErr);
+          throw new Error(`Échec upload fichier (${code}): ${msg}`);
+        }
       }
 
       const normalizedPayload = {
@@ -331,7 +338,9 @@ const AdminForm = () => {
       }
       navigate("/");
     } catch (err) {
-      setError(formatApiError(err));
+      console.error("Submit error", err);
+      const directMsg = err?.message && !err?.response ? err.message : null;
+      setError(directMsg || formatApiError(err));
     } finally {
       setLoading(false);
     }
