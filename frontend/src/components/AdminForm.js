@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../AuthContext";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { storage } from "../firebase";
 
 const ETATS = [
@@ -190,9 +190,10 @@ const AdminForm = () => {
     commentaire: "",
     visibilite: [],
     file_url: null,
+    files: [],
   });
 
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [pendingFiles, setPendingFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [entreprises, setEntreprises] = useState([]);
@@ -230,6 +231,11 @@ const AdminForm = () => {
                   : [],
               revenu: current.revenu ?? "",
               file_url: current.file_url ?? null,
+              files: Array.isArray(current.files) && current.files.length > 0
+                ? current.files
+                : current.file_url
+                  ? [{ url: current.file_url, name: "Fichier" }]
+                  : [],
             };
             setFormData(formatted);
           }
@@ -280,9 +286,39 @@ const AdminForm = () => {
   };
 
   const handleFileChange = (e) => {
-    if (e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
+    console.log("[AdminForm] handleFileChange called", {
+      files: e.target.files,
+      count: e.target.files?.length,
+    });
+    if (e.target.files && e.target.files.length > 0) {
+      const newFiles = Array.from(e.target.files);
+      console.log("[AdminForm] adding files", newFiles.map((f) => f.name));
+      setPendingFiles((prev) => {
+        const next = [...prev, ...newFiles];
+        console.log("[AdminForm] new pendingFiles count", next.length);
+        return next;
+      });
+      e.target.value = "";
     }
+  };
+
+  const removePendingFile = (index) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeUploadedFile = async (index) => {
+    const target = formData.files[index];
+    if (!target) return;
+    try {
+      const fileRef = ref(storage, target.url);
+      await deleteObject(fileRef);
+    } catch (err) {
+      console.warn("Suppression Storage échouée (le fichier sera quand même retiré de la demande)", err);
+    }
+    setFormData((prev) => ({
+      ...prev,
+      files: prev.files.filter((_, i) => i !== index),
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -292,14 +328,22 @@ const AdminForm = () => {
 
     try {
       const token = await user.getIdToken();
-      let fileUrl = formData.file_url;
+      let uploadedNew = [];
 
-      if (selectedFile) {
+      if (pendingFiles.length > 0) {
         try {
           const folder = id || `temp_${Date.now()}`;
-          const fileRef = ref(storage, `demandes/${folder}/${selectedFile.name}`);
-          const snapshot = await uploadBytes(fileRef, selectedFile);
-          fileUrl = await getDownloadURL(snapshot.ref);
+          uploadedNew = await Promise.all(
+            pendingFiles.map(async (file) => {
+              const fileRef = ref(
+                storage,
+                `demandes/${folder}/${Date.now()}_${file.name}`
+              );
+              const snapshot = await uploadBytes(fileRef, file);
+              const url = await getDownloadURL(snapshot.ref);
+              return { url, name: file.name };
+            })
+          );
         } catch (uploadErr) {
           console.error("Firebase upload error", uploadErr);
           const code = uploadErr?.code || uploadErr?.name || "unknown";
@@ -308,13 +352,16 @@ const AdminForm = () => {
         }
       }
 
+      const allFiles = [...(formData.files || []), ...uploadedNew];
+
       const normalizedPayload = {
         ...formData,
         date_demande: formData.date_demande || null,
         date_sondage_prevue: formData.date_sondage_prevue || null,
         date_remise_rapport_prevue: formData.date_remise_rapport_prevue || null,
         revenu: formData.revenu ? String(formData.revenu).trim() : null,
-        file_url: fileUrl,
+        files: allFiles,
+        file_url: allFiles[0]?.url || null,
       };
 
       if (id) {
@@ -325,7 +372,8 @@ const AdminForm = () => {
             date_remise_rapport_prevue: normalizedPayload.date_remise_rapport_prevue,
             montant_chantier: formData.montant_chantier,
             commentaire: formData.commentaire,
-            file_url: fileUrl,
+            files: allFiles,
+            file_url: allFiles[0]?.url || null,
         };
         await axios.put(`${process.env.REACT_APP_API_URL}/demandes/${id}`, payload, {
           headers: { Authorization: `Bearer ${token}` }
@@ -548,12 +596,38 @@ const AdminForm = () => {
                 value={formData.commentaire} onChange={handleChange} 
             />
 
-            <label>Fichier / Document:</label>
-            <input type="file" onChange={handleFileChange} />
-            {formData.file_url && (
-              <p className="file-link">
-                Fichier actuel: <a href={formData.file_url} target="_blank" rel="noopener noreferrer">Voir le document</a>
-              </p>
+            <label>Fichiers / Documents:</label>
+            <input type="file" multiple onChange={handleFileChange} />
+
+            {(formData.files?.length > 0 || pendingFiles.length > 0) && (
+              <ul className="files-list">
+                {formData.files?.map((f, i) => (
+                  <li key={`uploaded-${i}`}>
+                    <a href={f.url} target="_blank" rel="noopener noreferrer">
+                      📄 {f.name || "Fichier"}
+                    </a>
+                    <button
+                      type="button"
+                      className="btn-small btn-danger"
+                      onClick={() => removeUploadedFile(i)}
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+                {pendingFiles.map((f, i) => (
+                  <li key={`pending-${i}`} className="pending">
+                    <span>📎 {f.name} <em>(à uploader)</em></span>
+                    <button
+                      type="button"
+                      className="btn-small btn-danger"
+                      onClick={() => removePendingFile(i)}
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
           </section>
 

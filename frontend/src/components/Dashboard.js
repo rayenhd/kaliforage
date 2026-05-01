@@ -3,7 +3,7 @@ import axios from "axios";
 import { useAuth } from "../AuthContext";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { storage } from "../firebase";
 
 const ETATS = [
@@ -42,7 +42,7 @@ const buildFieldConfig = (entreprises) => ({
   revenu: { label: "Revenu", type: "text" },
   commentaire: { label: "Commentaire", type: "textarea" },
   visibilite: { label: "Visibilité", type: "multiselect", options: entreprises },
-  file_url: { label: "Fichier", type: "file" },
+  files: { label: "Fichiers", type: "files" },
 });
 
 const Dashboard = () => {
@@ -52,7 +52,7 @@ const Dashboard = () => {
   const [selectedAdminFilters, setSelectedAdminFilters] = useState([]);
   const [editingCell, setEditingCell] = useState(null);
   const [editValue, setEditValue] = useState("");
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [pendingCellFiles, setPendingCellFiles] = useState([]);
   const [savingCell, setSavingCell] = useState(false);
   const [cellError, setCellError] = useState("");
   const [entreprises, setEntreprises] = useState([]);
@@ -137,9 +137,17 @@ const Dashboard = () => {
     if (config.type === "number") {
       initialValue = initialValue ?? "";
     }
+    if (config.type === "files") {
+      const existing = Array.isArray(demande.files) ? demande.files : [];
+      if (existing.length === 0 && demande.file_url) {
+        initialValue = [{ url: demande.file_url, name: "Fichier" }];
+      } else {
+        initialValue = existing;
+      }
+    }
 
     setCellError("");
-    setSelectedFile(null);
+    setPendingCellFiles([]);
     setEditingCell({ demandeId: demande.id, field, config });
     setEditValue(initialValue ?? "");
   };
@@ -148,7 +156,7 @@ const Dashboard = () => {
     if (savingCell) return;
     setEditingCell(null);
     setEditValue("");
-    setSelectedFile(null);
+    setPendingCellFiles([]);
     setCellError("");
   };
 
@@ -160,9 +168,27 @@ const Dashboard = () => {
   };
 
   const handleFileChange = (e) => {
-    if (e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      setPendingCellFiles((prev) => [...prev, ...Array.from(e.target.files)]);
+      e.target.value = "";
     }
+  };
+
+  const removeCellPendingFile = (index) => {
+    setPendingCellFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeCellUploadedFile = async (index) => {
+    const list = Array.isArray(editValue) ? editValue : [];
+    const target = list[index];
+    if (!target) return;
+    try {
+      const fileRef = ref(storage, target.url);
+      await deleteObject(fileRef);
+    } catch (err) {
+      console.warn("Suppression Storage échouée", err);
+    }
+    setEditValue(list.filter((_, i) => i !== index));
   };
 
   const saveCellValue = async () => {
@@ -175,11 +201,23 @@ const Dashboard = () => {
       setSavingCell(true);
       setCellError("");
 
-      if (config.type === "file" && selectedFile) {
-        // Upload file to Firebase Storage
-        const fileRef = ref(storage, `demandes/${demandeId}/${selectedFile.name}`);
-        const snapshot = await uploadBytes(fileRef, selectedFile);
-        valueToSend = await getDownloadURL(snapshot.ref);
+      if (config.type === "files") {
+        const existing = Array.isArray(editValue) ? editValue : [];
+        let uploaded = [];
+        if (pendingCellFiles.length > 0) {
+          uploaded = await Promise.all(
+            pendingCellFiles.map(async (file) => {
+              const fileRef = ref(
+                storage,
+                `demandes/${demandeId}/${Date.now()}_${file.name}`
+              );
+              const snapshot = await uploadBytes(fileRef, file);
+              const url = await getDownloadURL(snapshot.ref);
+              return { url, name: file.name };
+            })
+          );
+        }
+        valueToSend = [...existing, ...uploaded];
       } else if (config.type === "number") {
         if (editValue === "" || editValue === null || editValue === undefined) {
           valueToSend = null;
@@ -196,6 +234,11 @@ const Dashboard = () => {
       }
 
       const payload = { [field]: valueToSend };
+      if (field === "files") {
+        payload.file_url = Array.isArray(valueToSend) && valueToSend[0]?.url
+          ? valueToSend[0].url
+          : null;
+      }
       const token = await user.getIdToken();
       const res = await axios.put(`${process.env.REACT_APP_API_URL}/demandes/${demandeId}`, payload, {
         headers: { Authorization: `Bearer ${token}` },
@@ -384,7 +427,7 @@ const Dashboard = () => {
                 <th>Revenu</th>
                 <th>Commentaire</th>
                 <th>Visibilité</th>
-                <th>Fichier</th>
+                <th>Fichiers</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -425,14 +468,25 @@ const Dashboard = () => {
                       "-"
                     )}
                   </td>
-                  <td className={editableClass("file_url")} onClick={() => openCellEditor(d, "file_url")}>
-                    {d.file_url ? (
-                      <a href={d.file_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                        📄 Voir
-                      </a>
-                    ) : (
-                      <span style={{ opacity: 0.5 }}>-</span>
-                    )}
+                  <td className={editableClass("files")} onClick={() => openCellEditor(d, "files")}>
+                    {(() => {
+                      const list = Array.isArray(d.files) && d.files.length > 0
+                        ? d.files
+                        : d.file_url
+                          ? [{ url: d.file_url, name: "Fichier" }]
+                          : [];
+                      if (list.length === 0) {
+                        return <span style={{ opacity: 0.5 }}>-</span>;
+                      }
+                      if (list.length === 1) {
+                        return (
+                          <a href={list[0].url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                            📄 Voir
+                          </a>
+                        );
+                      }
+                      return <span>📄 {list.length} fichiers</span>;
+                    })()}
                   </td>
                   <td className="actions-cell">
                     <Link to={`/edit/${d.id}`} className="btn-small">
@@ -472,14 +526,39 @@ const Dashboard = () => {
               <input type="date" value={editValue} onChange={(e) => setEditValue(e.target.value)} />
             )}
 
-            {editingCell.config.type === "file" && (
+            {editingCell.config.type === "files" && (
               <div className="file-upload-container">
-                <input type="file" onChange={handleFileChange} />
-                {editValue && (
-                  <p className="current-file">
-                    Fichier actuel: <a href={editValue} target="_blank" rel="noopener noreferrer">Voir le fichier</a>
-                  </p>
-                )}
+                <input type="file" multiple onChange={handleFileChange} />
+                {(Array.isArray(editValue) && editValue.length > 0) || pendingCellFiles.length > 0 ? (
+                  <ul className="files-list">
+                    {(Array.isArray(editValue) ? editValue : []).map((f, i) => (
+                      <li key={`uploaded-${i}`}>
+                        <a href={f.url} target="_blank" rel="noopener noreferrer">
+                          📄 {f.name || "Fichier"}
+                        </a>
+                        <button
+                          type="button"
+                          className="btn-small btn-danger"
+                          onClick={() => removeCellUploadedFile(i)}
+                        >
+                          ✕
+                        </button>
+                      </li>
+                    ))}
+                    {pendingCellFiles.map((f, i) => (
+                      <li key={`pending-${i}`} className="pending">
+                        <span>📎 {f.name} <em>(à uploader)</em></span>
+                        <button
+                          type="button"
+                          className="btn-small btn-danger"
+                          onClick={() => removeCellPendingFile(i)}
+                        >
+                          ✕
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
             )}
 

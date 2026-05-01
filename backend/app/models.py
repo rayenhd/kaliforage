@@ -1,7 +1,19 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from typing import List, Optional
 from datetime import datetime
 from enum import Enum
+
+
+class FileItem(BaseModel):
+    url: str
+    name: str = "Fichier"
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def default_name(cls, value):
+        if not value or not str(value).strip():
+            return "Fichier"
+        return str(value).strip()
 
 class EtatDemande(str, Enum):
     EN_ATTENTE = "🟡 En attente"
@@ -43,6 +55,7 @@ class DemandeBase(BaseModel):
     commentaire: Optional[str] = None
     visibilite: List[str] = Field(default_factory=list)
     file_url: Optional[str] = None
+    files: List[FileItem] = Field(default_factory=list)
 
     @field_validator("type_revenu", mode="before")
     @classmethod
@@ -50,6 +63,29 @@ class DemandeBase(BaseModel):
         if value is None:
             return []
         return value if isinstance(value, list) else [value]
+
+    @field_validator("files", mode="before")
+    @classmethod
+    def normalize_files(cls, value):
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            return []
+        cleaned = []
+        for item in value:
+            if isinstance(item, FileItem):
+                cleaned.append(item)
+            elif isinstance(item, dict) and item.get("url"):
+                cleaned.append(item)
+            elif isinstance(item, str) and item.strip():
+                cleaned.append({"url": item.strip(), "name": "Fichier"})
+        return cleaned
+
+    @model_validator(mode="after")
+    def populate_files_from_legacy(self):
+        if not self.files and self.file_url:
+            self.files = [FileItem(url=self.file_url, name="Fichier")]
+        return self
 
 class DemandeCreate(DemandeBase):
     pass
@@ -73,6 +109,7 @@ class DemandeUpdate(BaseModel):
     commentaire: Optional[str] = None
     visibilite: Optional[List[str]] = None
     file_url: Optional[str] = None
+    files: Optional[List[FileItem]] = None
 
     @field_validator("type_revenu", mode="before")
     @classmethod
@@ -80,6 +117,23 @@ class DemandeUpdate(BaseModel):
         if value is None:
             return None
         return value if isinstance(value, list) else [value]
+
+    @field_validator("files", mode="before")
+    @classmethod
+    def normalize_files(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            return []
+        cleaned = []
+        for item in value:
+            if isinstance(item, FileItem):
+                cleaned.append(item)
+            elif isinstance(item, dict) and item.get("url"):
+                cleaned.append(item)
+            elif isinstance(item, str) and item.strip():
+                cleaned.append({"url": item.strip(), "name": "Fichier"})
+        return cleaned
 
 class DemandeBEUpdate(BaseModel):
     # Restricted update for BE users
@@ -108,6 +162,7 @@ class DemandeEntrepriseUpdate(BaseModel):
     revenu: Optional[str] = None
     commentaire: Optional[str] = None
     file_url: Optional[str] = None
+    files: Optional[List[FileItem]] = None
 
     @field_validator("type_revenu", mode="before")
     @classmethod
@@ -115,6 +170,23 @@ class DemandeEntrepriseUpdate(BaseModel):
         if value is None:
             return None
         return value if isinstance(value, list) else [value]
+
+    @field_validator("files", mode="before")
+    @classmethod
+    def normalize_files(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            return []
+        cleaned = []
+        for item in value:
+            if isinstance(item, FileItem):
+                cleaned.append(item)
+            elif isinstance(item, dict) and item.get("url"):
+                cleaned.append(item)
+            elif isinstance(item, str) and item.strip():
+                cleaned.append({"url": item.strip(), "name": "Fichier"})
+        return cleaned
 
 class Demande(DemandeBase):
     id: str
