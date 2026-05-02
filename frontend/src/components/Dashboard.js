@@ -122,6 +122,7 @@ const Dashboard = () => {
   );
 
   const openCellEditor = (demande, field) => {
+    console.log("[CellEditor] openCellEditor", { demandeId: demande.id, field, canEdit: canEditField(field) });
     if (!canEditField(field)) return;
 
     const config = fieldConfig[field];
@@ -144,6 +145,7 @@ const Dashboard = () => {
       } else {
         initialValue = existing;
       }
+      console.log("[CellEditor] files initialValue", initialValue);
     }
 
     setCellError("");
@@ -168,9 +170,21 @@ const Dashboard = () => {
   };
 
   const handleFileChange = (e) => {
+    console.log("[CellEditor] handleFileChange called", {
+      hasFiles: !!e.target.files,
+      count: e.target.files?.length,
+      names: e.target.files ? Array.from(e.target.files).map((f) => f.name) : [],
+    });
     if (e.target.files && e.target.files.length > 0) {
-      setPendingCellFiles((prev) => [...prev, ...Array.from(e.target.files)]);
+      const newFiles = Array.from(e.target.files);
+      setPendingCellFiles((prev) => {
+        const next = [...prev, ...newFiles];
+        console.log("[CellEditor] pendingCellFiles updated", { count: next.length, names: next.map((f) => f.name) });
+        return next;
+      });
       e.target.value = "";
+    } else {
+      console.log("[CellEditor] handleFileChange called but no files in e.target.files");
     }
   };
 
@@ -192,7 +206,17 @@ const Dashboard = () => {
   };
 
   const saveCellValue = async () => {
-    if (!editingCell || !user) return;
+    console.log("[CellEditor] saveCellValue START", {
+      hasEditingCell: !!editingCell,
+      hasUser: !!user,
+      pendingCellFilesCount: pendingCellFiles.length,
+      pendingCellFilesNames: pendingCellFiles.map((f) => f.name),
+      editValue,
+    });
+    if (!editingCell || !user) {
+      console.warn("[CellEditor] saveCellValue aborted: missing editingCell or user");
+      return;
+    }
 
     const { demandeId, field, config } = editingCell;
     let valueToSend = editValue;
@@ -205,19 +229,23 @@ const Dashboard = () => {
         const existing = Array.isArray(editValue) ? editValue : [];
         let uploaded = [];
         if (pendingCellFiles.length > 0) {
+          console.log("[CellEditor] uploading", pendingCellFiles.length, "pending file(s) to Storage");
           uploaded = await Promise.all(
             pendingCellFiles.map(async (file) => {
-              const fileRef = ref(
-                storage,
-                `demandes/${demandeId}/${Date.now()}_${file.name}`
-              );
+              const path = `demandes/${demandeId}/${Date.now()}_${file.name}`;
+              console.log("[CellEditor] uploadBytes →", path);
+              const fileRef = ref(storage, path);
               const snapshot = await uploadBytes(fileRef, file);
               const url = await getDownloadURL(snapshot.ref);
+              console.log("[CellEditor] upload OK", { name: file.name, url });
               return { url, name: file.name };
             })
           );
+        } else {
+          console.log("[CellEditor] no pending files to upload");
         }
         valueToSend = [...existing, ...uploaded];
+        console.log("[CellEditor] final files valueToSend", valueToSend);
       } else if (config.type === "number") {
         if (editValue === "" || editValue === null || editValue === undefined) {
           valueToSend = null;
@@ -239,14 +267,17 @@ const Dashboard = () => {
           ? valueToSend[0].url
           : null;
       }
+      console.log("[CellEditor] PUT payload", payload);
       const token = await user.getIdToken();
       const res = await axios.put(`${process.env.REACT_APP_API_URL}/demandes/${demandeId}`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      console.log("[CellEditor] PUT response", res.data);
 
       setDemandes((prev) => prev.map((d) => (d.id === demandeId ? res.data : d)));
       closeCellEditor();
     } catch (error) {
+      console.error("[CellEditor] saveCellValue ERROR", error);
       setCellError(error.response?.data?.detail || "Impossible de sauvegarder cette valeur.");
     } finally {
       setSavingCell(false);
@@ -528,7 +559,13 @@ const Dashboard = () => {
 
             {editingCell.config.type === "files" && (
               <div className="file-upload-container">
-                <input type="file" multiple onChange={handleFileChange} />
+                {console.log("[CellEditor] rendering files modal", { editValueLen: Array.isArray(editValue) ? editValue.length : "(not array)", pendingCount: pendingCellFiles.length })}
+                <input
+                  type="file"
+                  multiple
+                  onChange={handleFileChange}
+                  onClick={() => console.log("[CellEditor] file input clicked")}
+                />
                 {(Array.isArray(editValue) && editValue.length > 0) || pendingCellFiles.length > 0 ? (
                   <ul className="files-list">
                     {(Array.isArray(editValue) ? editValue : []).map((f, i) => (
@@ -592,7 +629,12 @@ const Dashboard = () => {
               <button type="button" className="btn-secondary" onClick={closeCellEditor} disabled={savingCell}>
                 Annuler
               </button>
-              <button type="button" className="btn-primary" onClick={saveCellValue} disabled={savingCell}>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => { console.log("[CellEditor] Enregistrer clicked", { savingCell }); saveCellValue(); }}
+                disabled={savingCell}
+              >
                 {savingCell ? "Enregistrement..." : "Enregistrer"}
               </button>
             </div>

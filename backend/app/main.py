@@ -129,7 +129,7 @@ async def update_demande(
         # Validate with DemandeUpdate model
         try:
             update_obj = DemandeUpdate(**demande_update)
-            update_data = {k: v for k, v in update_obj.dict().items() if v is not None}
+            update_data = update_obj.model_dump(exclude_unset=True)
             doc_ref.update(update_data)
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -137,11 +137,11 @@ async def update_demande(
         # BE User: check if they have visibility
         if current_user.role not in demande_data.get("visibilite", []):
             raise HTTPException(status_code=403, detail="Not authorized to edit this demande")
-        
+
         # Company users can update visible demandes (except visibility field).
         try:
             update_obj = DemandeEntrepriseUpdate(**demande_update)
-            update_data = {k: v for k, v in update_obj.dict().items() if v is not None}
+            update_data = update_obj.model_dump(exclude_unset=True)
             doc_ref.update(update_data)
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
