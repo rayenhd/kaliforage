@@ -54,6 +54,14 @@ function App() {
               }
             />
             <Route
+              path="/annules"
+              element={
+                <ProtectedRoute>
+                  <Dashboard categoryKey="annules" />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/new"
               element={
                 <ProtectedRoute allowedRoles={["ADMIN"]}>

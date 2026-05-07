@@ -22,11 +22,15 @@ export const ETAT_CATEGORIES = {
   },
   "devis-envoyes": {
     label: "Devis envoyés",
-    etats: ["🔵 Devis envoyé", "🟠 Devis Accepté", "🟣 Planifié", "🔴 Refusé / abandonné"],
+    etats: ["🔵 Devis envoyé", "🟠 Devis Accepté", "🟣 Planifié"],
   },
   "realisees": {
     label: "Études réalisées",
     etats: ["🟢 Réalisé"],
+  },
+  "annules": {
+    label: "Annulés",
+    etats: ["🔴 Refusé / abandonné"],
   },
 };
 
@@ -410,14 +414,20 @@ const Dashboard = ({ categoryKey = null }) => {
   };
 
   const filteredDemandes = useMemo(
-    () =>
-      demandes.filter((d) => {
+    () => {
+      const filtered = demandes.filter((d) => {
         if (allowedEtats && !allowedEtats.includes(d.etat)) return false;
         if (role !== "ADMIN") return true;
         if (selectedAdminFilters.length === 0) return true;
         if (!Array.isArray(d.visibilite)) return false;
         return d.visibilite.some((v) => selectedAdminFilters.includes(v));
-      }),
+      });
+      return filtered.sort((a, b) => {
+        const ta = a.date_demande ? new Date(a.date_demande).getTime() : 0;
+        const tb = b.date_demande ? new Date(b.date_demande).getTime() : 0;
+        return tb - ta;
+      });
+    },
     [selectedAdminFilters, demandes, role, allowedEtats]
   );
 
@@ -433,7 +443,7 @@ const Dashboard = ({ categoryKey = null }) => {
         </div>
       </header>
 
-      <nav className="dashboard-nav dashboard-tabs">
+      {/* <nav className="dashboard-nav dashboard-tabs">
         <NavLink to="/" end className={({ isActive }) => (isActive ? "btn-primary" : "btn-secondary")}>
           Toutes
         </NavLink>
@@ -446,7 +456,7 @@ const Dashboard = ({ categoryKey = null }) => {
             {cat.label}
           </NavLink>
         ))}
-      </nav>
+      </nav> */}
 
       <nav className="dashboard-nav">
         {role === "ADMIN" && (
@@ -496,6 +506,21 @@ const Dashboard = ({ categoryKey = null }) => {
           {companyError && <p className="error">{companyError}</p>}
         </section>
       )}
+
+      <nav className="dashboard-nav dashboard-tabs">
+        <NavLink to="/" end className={({ isActive }) => (isActive ? "btn-primary" : "btn-secondary")}>
+          Toutes
+        </NavLink>
+        {Object.entries(ETAT_CATEGORIES).map(([key, cat]) => (
+          <NavLink
+            key={key}
+            to={`/${key}`}
+            className={({ isActive }) => (isActive ? "btn-primary" : "btn-secondary")}
+          >
+            {cat.label}
+          </NavLink>
+        ))}
+      </nav>
 
       {loading ? (
         <p>Chargement...</p>
