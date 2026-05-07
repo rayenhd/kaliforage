@@ -30,6 +30,30 @@ function App() {
               }
             />
             <Route
+              path="/en-attente"
+              element={
+                <ProtectedRoute>
+                  <Dashboard categoryKey="en-attente" />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/devis-envoyes"
+              element={
+                <ProtectedRoute>
+                  <Dashboard categoryKey="devis-envoyes" />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/realisees"
+              element={
+                <ProtectedRoute>
+                  <Dashboard categoryKey="realisees" />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/new"
               element={
                 <ProtectedRoute allowedRoles={["ADMIN"]}>

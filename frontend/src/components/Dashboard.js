@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useAuth } from "../AuthContext";
-import { Link } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { format } from "date-fns";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { storage } from "../firebase";
@@ -14,6 +14,21 @@ const ETATS = [
   "🟢 Réalisé",
   "🔴 Refusé / abandonné",
 ];
+
+export const ETAT_CATEGORIES = {
+  "en-attente": {
+    label: "Demandes en attente",
+    etats: ["🟡 En attente"],
+  },
+  "devis-envoyes": {
+    label: "Devis envoyés",
+    etats: ["🔵 Devis envoyé", "🟠 Devis Accepté", "🟣 Planifié", "🔴 Refusé / abandonné"],
+  },
+  "realisees": {
+    label: "Études réalisées",
+    etats: ["🟢 Réalisé"],
+  },
+};
 
 const TYPES_REVENU = ["🟡 Apport d’affaires", "🔵 Location Machine", "🟣 Sondage"];
 const TYPES_INTERVENTION = [
@@ -45,8 +60,11 @@ const buildFieldConfig = (entreprises) => ({
   files: { label: "Fichiers", type: "files" },
 });
 
-const Dashboard = () => {
+const Dashboard = ({ categoryKey = null }) => {
   const { user, role, logout } = useAuth();
+  const category = categoryKey ? ETAT_CATEGORIES[categoryKey] : null;
+  const allowedEtats = category?.etats || null;
+  const pageTitle = category?.label || "Toutes les demandes";
   const [demandes, setDemandes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedAdminFilters, setSelectedAdminFilters] = useState([]);
@@ -190,6 +208,35 @@ const Dashboard = () => {
 
   const removeCellPendingFile = (index) => {
     setPendingCellFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const [downloadingAll, setDownloadingAll] = useState(false);
+
+  const downloadAllCellFiles = async () => {
+    const files = Array.isArray(editValue) ? editValue : [];
+    if (files.length === 0) return;
+    setDownloadingAll(true);
+    try {
+      for (const file of files) {
+        try {
+          const response = await fetch(file.url);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = objectUrl;
+          a.download = file.name || "Fichier";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(objectUrl);
+        } catch (err) {
+          console.error("Download failed for", file.name, err);
+        }
+      }
+    } finally {
+      setDownloadingAll(false);
+    }
   };
 
   const removeCellUploadedFile = async (index) => {
@@ -365,12 +412,13 @@ const Dashboard = () => {
   const filteredDemandes = useMemo(
     () =>
       demandes.filter((d) => {
+        if (allowedEtats && !allowedEtats.includes(d.etat)) return false;
         if (role !== "ADMIN") return true;
         if (selectedAdminFilters.length === 0) return true;
         if (!Array.isArray(d.visibilite)) return false;
         return d.visibilite.some((v) => selectedAdminFilters.includes(v));
       }),
-    [selectedAdminFilters, demandes, role]
+    [selectedAdminFilters, demandes, role, allowedEtats]
   );
 
   const editableClass = (field) => (canEditField(field) ? "editable-cell" : "readonly-cell");
@@ -378,12 +426,27 @@ const Dashboard = () => {
   return (
     <div className="dashboard-container">
       <header>
-        <h1>Tableau de Bord - {role}</h1>
+        <h1>{pageTitle} - {role}</h1>
         <div className="user-info">
           <span>{user.email}</span>
           <button onClick={logout} className="btn-secondary">Déconnexion</button>
         </div>
       </header>
+
+      <nav className="dashboard-nav dashboard-tabs">
+        <NavLink to="/" end className={({ isActive }) => (isActive ? "btn-primary" : "btn-secondary")}>
+          Toutes
+        </NavLink>
+        {Object.entries(ETAT_CATEGORIES).map(([key, cat]) => (
+          <NavLink
+            key={key}
+            to={`/${key}`}
+            className={({ isActive }) => (isActive ? "btn-primary" : "btn-secondary")}
+          >
+            {cat.label}
+          </NavLink>
+        ))}
+      </nav>
 
       <nav className="dashboard-nav">
         {role === "ADMIN" && (
@@ -566,6 +629,16 @@ const Dashboard = () => {
                   onChange={handleFileChange}
                   onClick={() => console.log("[CellEditor] file input clicked")}
                 />
+                {Array.isArray(editValue) && editValue.length > 0 && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={downloadAllCellFiles}
+                    disabled={downloadingAll}
+                  >
+                    {downloadingAll ? "Téléchargement…" : `⬇ Tout télécharger (${editValue.length})`}
+                  </button>
+                )}
                 {(Array.isArray(editValue) && editValue.length > 0) || pendingCellFiles.length > 0 ? (
                   <ul className="files-list">
                     {(Array.isArray(editValue) ? editValue : []).map((f, i) => (
