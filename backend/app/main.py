@@ -29,7 +29,8 @@ if not firebase_admin._apps:
 
 from .models import (
     Demande, DemandeCreate, DemandeUpdate, DemandeEntrepriseUpdate,
-    UserInfo, UserRole, UserCreate, Entreprise
+    UserInfo, UserRole, UserCreate, Entreprise,
+    MailTemplate, MailTemplateCreate, MailTemplateUpdate,
 )
 from .auth import get_current_user, require_role
 
@@ -214,6 +215,57 @@ async def delete_entreprise(
 
     doc_ref.delete()
     return {"message": "Entreprise supprimée"}
+
+# --- MAIL TEMPLATES ROUTES (ADMIN ONLY) ---
+
+@app.get("/api/mail-templates", response_model=List[MailTemplate])
+async def list_mail_templates(
+    current_user: UserInfo = Depends(require_role([UserRole.ADMIN.value]))
+):
+    docs = db.collection("mail_templates").stream()
+    results = []
+    for doc in docs:
+        data = doc.to_dict() or {}
+        results.append(MailTemplate(id=doc.id, **data))
+    results.sort(key=lambda t: t.created_at or datetime.min, reverse=True)
+    return results
+
+@app.post("/api/mail-templates", response_model=MailTemplate)
+async def create_mail_template(
+    template: MailTemplateCreate,
+    current_user: UserInfo = Depends(require_role([UserRole.ADMIN.value]))
+):
+    data = template.model_dump()
+    data["created_at"] = datetime.utcnow()
+    _, doc_ref = db.collection("mail_templates").add(data)
+    return MailTemplate(id=doc_ref.id, **data)
+
+@app.put("/api/mail-templates/{template_id}", response_model=MailTemplate)
+async def update_mail_template(
+    template_id: str,
+    template_update: MailTemplateUpdate,
+    current_user: UserInfo = Depends(require_role([UserRole.ADMIN.value]))
+):
+    doc_ref = db.collection("mail_templates").document(template_id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Template introuvable")
+    update_data = template_update.model_dump(exclude_unset=True)
+    if update_data:
+        doc_ref.update(update_data)
+    updated = doc_ref.get().to_dict() or {}
+    return MailTemplate(id=template_id, **updated)
+
+@app.delete("/api/mail-templates/{template_id}")
+async def delete_mail_template(
+    template_id: str,
+    current_user: UserInfo = Depends(require_role([UserRole.ADMIN.value]))
+):
+    doc_ref = db.collection("mail_templates").document(template_id)
+    if not doc_ref.get().exists:
+        raise HTTPException(status_code=404, detail="Template introuvable")
+    doc_ref.delete()
+    return {"message": "Template supprimé"}
 
 # --- INITIALIZATION ROUTE (DEBUG/FIRST RUN) ---
 

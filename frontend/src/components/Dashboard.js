@@ -64,6 +64,15 @@ const buildFieldConfig = (entreprises) => ({
   files: { label: "Fichiers", type: "files" },
 });
 
+const VIEW_MODE_STORAGE_KEY = "kaliforage:viewMode";
+
+const getInitialViewMode = () => {
+  if (typeof window === "undefined") return "table";
+  const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+  if (stored === "cards" || stored === "table") return stored;
+  return window.innerWidth < 768 ? "cards" : "table";
+};
+
 const Dashboard = ({ categoryKey = null }) => {
   const { user, role, logout } = useAuth();
   const category = categoryKey ? ETAT_CATEGORIES[categoryKey] : null;
@@ -80,6 +89,13 @@ const Dashboard = ({ categoryKey = null }) => {
   const [entreprises, setEntreprises] = useState([]);
   const [newEntreprise, setNewEntreprise] = useState("");
   const [companyError, setCompanyError] = useState("");
+  const [viewMode, setViewMode] = useState(getInitialViewMode);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
+    }
+  }, [viewMode]);
 
   const fieldConfig = useMemo(() => buildFieldConfig(entreprises), [entreprises]);
 
@@ -463,6 +479,7 @@ const Dashboard = ({ categoryKey = null }) => {
           <>
             <Link to="/new" className="btn-primary">Nouvelle Demande</Link>
             <Link to="/users" className="btn-secondary">Gérer les Utilisateurs</Link>
+            <Link to="/templates" className="btn-secondary">Templates Mail</Link>
           </>
         )}
       </nav>
@@ -522,8 +539,133 @@ const Dashboard = ({ categoryKey = null }) => {
         ))}
       </nav>
 
+      <div className="view-toggle">
+        <span className="view-toggle-label">Affichage :</span>
+        <button
+          type="button"
+          className={viewMode === "table" ? "btn-primary" : "btn-secondary"}
+          onClick={() => setViewMode("table")}
+        >
+          Tableau
+        </button>
+        <button
+          type="button"
+          className={viewMode === "cards" ? "btn-primary" : "btn-secondary"}
+          onClick={() => setViewMode("cards")}
+        >
+          Cartes
+        </button>
+      </div>
+
       {loading ? (
         <p>Chargement...</p>
+      ) : viewMode === "cards" ? (
+        <div className="demandes-cards">
+          {filteredDemandes.length === 0 && (
+            <p className="empty-table-cell">Aucune demande pour ce filtre.</p>
+          )}
+          {filteredDemandes.map((d) => {
+            const filesList = Array.isArray(d.files) && d.files.length > 0
+              ? d.files
+              : d.file_url
+                ? [{ url: d.file_url, name: "Fichier" }]
+                : [];
+            const cardFields = [
+              { key: "date_demande", label: "Date demande", value: formatDate(d.date_demande) },
+              { key: "adresse_chantier", label: "Chantier", value: d.adresse_chantier || "-" },
+              { key: "telephone", label: "Téléphone", value: d.telephone || "-" },
+              { key: "email", label: "Email", value: d.email || "-" },
+              { key: "adresse_facturation", label: "Adresse facturation", value: d.adresse_facturation || "-" },
+              {
+                key: "type_intervention",
+                label: "Type intervention",
+                value: Array.isArray(d.type_intervention) && d.type_intervention.length > 0
+                  ? d.type_intervention.join(", ")
+                  : "-",
+              },
+              { key: "description", label: "Description", value: d.description || "-" },
+              { key: "date_sondage_prevue", label: "Sondage prévu", value: formatDate(d.date_sondage_prevue) },
+              { key: "date_remise_rapport_prevue", label: "Remise rapport", value: formatDate(d.date_remise_rapport_prevue) },
+              { key: "montant_chantier", label: "Montant chantier", value: formatCurrency(d.montant_chantier) },
+              {
+                key: "type_revenu",
+                label: "Type revenu",
+                value: Array.isArray(d.type_revenu) && d.type_revenu.length > 0
+                  ? d.type_revenu.join(", ")
+                  : d.type_revenu || "-",
+              },
+              { key: "revenu", label: "Revenu", value: d.revenu || "-" },
+              { key: "commentaire", label: "Commentaire", value: d.commentaire || "-" },
+              {
+                key: "visibilite",
+                label: "Visibilité",
+                value: Array.isArray(d.visibilite) && d.visibilite.length > 0
+                  ? d.visibilite.join(", ")
+                  : "-",
+              },
+            ];
+            return (
+              <div key={d.id} className="demande-card">
+                <div className="demande-card-header">
+                  <div className="demande-card-title">
+                    <span
+                      className={editableClass("nom_client") + " demande-card-name"}
+                      onClick={() => openCellEditor(d, "nom_client")}
+                    >
+                      {d.nom_client || "(sans nom)"}
+                    </span>
+                  </div>
+                  <span
+                    className={editableClass("etat")}
+                    onClick={() => openCellEditor(d, "etat")}
+                  >
+                    <span className="status-badge">{d.etat}</span>
+                  </span>
+                </div>
+                <dl className="demande-card-fields">
+                  {cardFields.map((f) => (
+                    <div key={f.key} className="demande-card-row">
+                      <dt>{f.label}</dt>
+                      <dd
+                        className={editableClass(f.key)}
+                        onClick={() => openCellEditor(d, f.key)}
+                      >
+                        {f.value}
+                      </dd>
+                    </div>
+                  ))}
+                  <div className="demande-card-row">
+                    <dt>Fichiers</dt>
+                    <dd
+                      className={editableClass("files")}
+                      onClick={() => openCellEditor(d, "files")}
+                    >
+                      {filesList.length === 0 ? (
+                        <span style={{ opacity: 0.5 }}>-</span>
+                      ) : filesList.length === 1 ? (
+                        <a href={filesList[0].url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                          📄 Voir
+                        </a>
+                      ) : (
+                        <span>📄 {filesList.length} fichiers</span>
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+                <div className="demande-card-actions">
+                  <Link to={`/edit/${d.id}`} className="btn-small">
+                    {role === "ADMIN" ? "Modifier" : "Modifier (BE)"}
+                  </Link>
+                  {role === "ADMIN" && (
+                    <button type="button" className="btn-small btn-danger" onClick={() => deleteDemande(d.id)}>
+                      Supprimer
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div className="table-responsive">
           <table className="demandes-table">

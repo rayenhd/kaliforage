@@ -5,6 +5,7 @@ import Login from "./components/Login";
 import Dashboard from "./components/Dashboard";
 import AdminForm from "./components/AdminForm";
 import UserManagement from "./components/UserManagement";
+import Templates from "./components/Templates";
 import "./App.css";
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -82,6 +83,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={["ADMIN"]}>
                   <UserManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/templates"
+              element={
+                <ProtectedRoute allowedRoles={["ADMIN"]}>
+                  <Templates />
                 </ProtectedRoute>
               }
             />

@@ -221,3 +221,52 @@ class Entreprise(BaseModel):
 
 class UserCreate(UserInfo):
     pass
+
+class MailTemplateBase(BaseModel):
+    title: str
+    content: str
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("title must not be empty")
+        return cleaned
+
+    @field_validator("content")
+    @classmethod
+    def validate_content(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError("content must not be empty")
+        return value
+
+class MailTemplateCreate(MailTemplateBase):
+    pass
+
+class MailTemplateUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value):
+        if value is None:
+            return value
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("title must not be empty")
+        return cleaned
+
+    @field_validator("content")
+    @classmethod
+    def validate_content(cls, value):
+        if value is None:
+            return value
+        if not value.strip():
+            raise ValueError("content must not be empty")
+        return value
+
+class MailTemplate(MailTemplateBase):
+    id: str
+    created_at: Optional[datetime] = None
