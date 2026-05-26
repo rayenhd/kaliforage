@@ -825,3 +825,113 @@ textarea:focus {
   resize: vertical;
 }
 
+/* Rich text editor (templates) */
+.rte {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.rte:focus-within {
+  border-color: var(--line-strong, #8aa1c2);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.rte-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-soft, #f6f8fb);
+}
+
+.rte-btn {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  color: #0b1324;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.rte-btn:hover {
+  background: #fff;
+  border-color: var(--line);
+}
+
+.rte-btn.is-active {
+  background: #e6efff;
+  border-color: #93b8ff;
+  color: #1d4ed8;
+}
+
+.rte-btn strong,
+.rte-btn em {
+  font-style: normal;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.rte-btn em {
+  font-style: italic;
+  font-weight: 600;
+}
+
+.rte-btn-u {
+  text-decoration: underline;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.rte-content {
+  min-height: 160px;
+  padding: 12px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  outline: none;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rte-content.is-empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted, #94a3b8);
+  pointer-events: none;
+}
+
+.cell-modal--lg {
+  width: min(720px, 100%);
+}
+
+.template-edit-title {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 14px;
+  background: #fff;
+  margin-bottom: 10px;
+}
+
+.template-dirty-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted, #64748b);
+  font-style: italic;
+}
+
