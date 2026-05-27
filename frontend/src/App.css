@@ -915,6 +915,25 @@ textarea:focus {
 
 .cell-modal--lg {
   width: min(720px, 100%);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.cell-modal--lg .rte {
+  flex: 1 1 auto;
+  min-height: 220px;
+}
+
+.cell-modal--lg .rte-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+}
+
+.cell-modal--lg .cell-modal-actions {
+  flex-shrink: 0;
 }
 
 .template-edit-title {
