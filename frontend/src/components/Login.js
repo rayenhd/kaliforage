@@ -13,7 +13,7 @@ const Login = () => {
     <div className="login-container">
       <h1>Kaliforage Management</h1>
       <p>Please sign in with your Google account to access the platform.</p>
-      <button onClick={login} className="btn-primary">
+      <button onClick={login} className="btn-danger">
         Sign in with Google
       </button>
     </div>
